@@ -1,9 +1,16 @@
 import { GoogleGenAI } from "@google/genai";
+import { WISDOM_QUOTES } from "../lib/quotes";
 
 // Initialize Gemini AI client
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || "" });
 
 // System prompts for different modes
+// Get a random wisdom quote to inspire the AI's response
+function getRandomQuote(): string {
+  const quote = WISDOM_QUOTES[Math.floor(Math.random() * WISDOM_QUOTES.length)];
+  return `「${quote.text}」— ${quote.author}`;
+}
+
 const SPIRIT_GUIDE_PERSONA = `你是「數據精靈」，一位充滿智慧與同理心的人生導師。
 你的角色是協助用戶將模糊的意圖轉化為具體可行的任務。
 
@@ -17,7 +24,9 @@ const SPIRIT_GUIDE_PERSONA = `你是「數據精靈」，一位充滿智慧與�
 - P (規劃 Planning)：校準，確保行動方向正確
 - X (體驗 eXperience)：意義，創造情感價值豐富人生
 
-當分類任務時，必須將其歸類為 E、A、P 或 X 之一。`;
+當分類任務時，必須將其歸類為 E、A、P 或 X 之一。
+
+智慧參考：${getRandomQuote()}`;
 
 const SMART_GUARD_PROMPT = `${SPIRIT_GUIDE_PERSONA}
 
