@@ -18,7 +18,9 @@ import {
   SplitSquareVertical,
   Plus,
   Zap,
-  ListTodo
+  ListTodo,
+  ImagePlus,
+  X
 } from "lucide-react";
 import { hapticLight, hapticMedium, hapticSuccess } from "@/lib/haptics";
 import { cn } from "@/lib/utils";
@@ -26,10 +28,17 @@ import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { MonumentConfig } from "@/lib/monuments";
 import type { Task } from "@shared/schema";
 
+export interface ImageAttachment {
+  data: string; // base64 encoded
+  mimeType: string;
+  name: string;
+}
+
 export interface Message {
   id: string;
   role: "user" | "assistant";
   content: string;
+  images?: ImageAttachment[];
   options?: string[];
   optionsNote?: string;
   toolCalls?: Array<{
@@ -44,7 +53,7 @@ interface CollaborativeChatProps {
   sessionId: string;
   messages: Message[];
   isLoading: boolean;
-  onSendMessage: (message: string) => void;
+  onSendMessage: (message: string, images?: ImageAttachment[]) => void;
   onSelectOption: (option: string) => void;
   onBack: () => void;
   onTasksUpdated?: () => void;
@@ -93,6 +102,18 @@ function MessageBubble({
             : "bg-card border border-border rounded-bl-md"
         )}
       >
+        {message.images && message.images.length > 0 && (
+          <div className="flex flex-wrap gap-2 mb-2">
+            {message.images.map((img, idx) => (
+              <img
+                key={idx}
+                src={`data:${img.mimeType};base64,${img.data}`}
+                alt={img.name}
+                className="max-w-[200px] max-h-[150px] rounded-lg object-cover"
+              />
+            ))}
+          </div>
+        )}
         <p className="text-sm whitespace-pre-wrap">{message.content}</p>
       </div>
       
@@ -310,8 +331,10 @@ export function CollaborativeChat({
 }: CollaborativeChatProps) {
   const [input, setInput] = useState("");
   const [isTaskListOpen, setIsTaskListOpen] = useState(true);
+  const [pendingImages, setPendingImages] = useState<ImageAttachment[]>([]);
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Fetch tasks for this session
   const { data: tasks = [], refetch: refetchTasks } = useQuery<Task[]>({
@@ -381,11 +404,52 @@ export function CollaborativeChat({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (input.trim() && !isLoading) {
+    if ((input.trim() || pendingImages.length > 0) && !isLoading) {
       hapticLight();
-      onSendMessage(input.trim());
+      onSendMessage(input.trim() || "請分析這張圖片", pendingImages.length > 0 ? pendingImages : undefined);
       setInput("");
+      setPendingImages([]);
     }
+  };
+
+  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files) return;
+
+    const newImages: ImageAttachment[] = [];
+    
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+      if (!file.type.startsWith("image/")) continue;
+      
+      const base64 = await new Promise<string>((resolve) => {
+        const reader = new FileReader();
+        reader.onload = () => {
+          const result = reader.result as string;
+          const base64Data = result.split(",")[1];
+          resolve(base64Data);
+        };
+        reader.readAsDataURL(file);
+      });
+
+      newImages.push({
+        data: base64,
+        mimeType: file.type,
+        name: file.name,
+      });
+    }
+
+    setPendingImages((prev) => [...prev, ...newImages]);
+    hapticLight();
+    
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
+  };
+
+  const removePendingImage = (index: number) => {
+    setPendingImages((prev) => prev.filter((_, i) => i !== index));
+    hapticLight();
   };
 
   const getIconColor = (slug: string) => {
@@ -501,12 +565,54 @@ export function CollaborativeChat({
         onSubmit={handleSubmit}
         className="px-4 py-3 border-t border-border bg-background safe-area-inset-bottom"
       >
+        {/* Pending Images Preview */}
+        {pendingImages.length > 0 && (
+          <div className="flex flex-wrap gap-2 mb-3">
+            {pendingImages.map((img, idx) => (
+              <div key={idx} className="relative">
+                <img
+                  src={`data:${img.mimeType};base64,${img.data}`}
+                  alt={img.name}
+                  className="w-16 h-16 rounded-lg object-cover border border-border"
+                />
+                <button
+                  type="button"
+                  onClick={() => removePendingImage(idx)}
+                  className="absolute -top-2 -right-2 w-5 h-5 bg-destructive text-destructive-foreground rounded-full flex items-center justify-center"
+                  data-testid={`button-remove-image-${idx}`}
+                >
+                  <X className="w-3 h-3" />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+        
         <div className="flex gap-2">
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*"
+            multiple
+            onChange={handleFileSelect}
+            className="hidden"
+            data-testid="input-file"
+          />
+          <Button
+            type="button"
+            size="icon"
+            variant="outline"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={isLoading}
+            data-testid="button-upload-image"
+          >
+            <ImagePlus className="w-5 h-5" />
+          </Button>
           <Input
             ref={inputRef}
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            placeholder="輸入目標或調整任務..."
+            placeholder={pendingImages.length > 0 ? "描述圖片或直接發送..." : "輸入目標或調整任務..."}
             className="flex-1 bg-card border-border"
             disabled={isLoading}
             data-testid="input-message"
@@ -514,7 +620,7 @@ export function CollaborativeChat({
           <Button
             type="submit"
             size="icon"
-            disabled={!input.trim() || isLoading}
+            disabled={(!input.trim() && pendingImages.length === 0) || isLoading}
             data-testid="button-send"
           >
             {isLoading ? (

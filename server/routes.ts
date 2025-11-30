@@ -260,7 +260,7 @@ export async function registerRoutes(
   // Chat endpoint - Smart Hub
   app.post("/api/chat", async (req, res) => {
     try {
-      const { sessionId, message } = req.body;
+      const { sessionId, message, images } = req.body;
       
       if (!sessionId || !message) {
         return res.status(400).json({ error: "sessionId and message are required" });
@@ -325,8 +325,8 @@ export async function registerRoutes(
         }
       }
 
-      // Call AI
-      const response = await chat(mode, message, context);
+      // Call AI (with images if provided)
+      const response = await chat(mode, message, context, images);
 
       // Process tool calls
       const toolCalls: Array<{

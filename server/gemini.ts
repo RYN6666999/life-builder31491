@@ -284,6 +284,12 @@ function getSystemPrompt(mode: ChatMode): string {
   }
 }
 
+interface ImageAttachment {
+  data: string;
+  mimeType: string;
+  name: string;
+}
+
 export async function chat(
   mode: ChatMode,
   userMessage: string,
@@ -293,7 +299,8 @@ export async function chat(
     sedonaStep?: number;
     currentTasks?: TaskItem[];
     conversationHistory?: Array<{ role: string; content: string }>;
-  }
+  },
+  images?: ImageAttachment[]
 ): Promise<ChatResponse> {
   try {
     const systemPrompt = getSystemPrompt(mode);
@@ -321,11 +328,29 @@ export async function chat(
       ).join('\n');
     }
 
-    const fullPrompt = `${systemPrompt}${contextInfo}${historyContext}\n\n用戶訊息：${userMessage}\n\n請以 JSON 格式回應。`;
+    const textPrompt = `${systemPrompt}${contextInfo}${historyContext}\n\n用戶訊息：${userMessage}\n\n${images && images.length > 0 ? "用戶上傳了圖片，請分析圖片內容並結合用戶訊息回應。\n\n" : ""}請以 JSON 格式回應。`;
+
+    // Build content parts for multimodal request
+    const contentParts: Array<{ text: string } | { inlineData: { mimeType: string; data: string } }> = [];
+    
+    // Add text prompt
+    contentParts.push({ text: textPrompt });
+    
+    // Add images if provided
+    if (images && images.length > 0) {
+      for (const img of images) {
+        contentParts.push({
+          inlineData: {
+            mimeType: img.mimeType,
+            data: img.data,
+          },
+        });
+      }
+    }
 
     const response = await ai.models.generateContent({
       model: "gemini-2.5-flash",
-      contents: fullPrompt,
+      contents: contentParts,
       config: {
         responseMimeType: "application/json",
       },

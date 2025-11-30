@@ -2,7 +2,7 @@ import { useState, useCallback, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { StateCheck } from "@/components/state-check";
 import { MonumentSelection } from "@/components/monument-selection";
-import { CollaborativeChat, type Message } from "@/components/collaborative-chat";
+import { CollaborativeChat, type Message, type ImageAttachment } from "@/components/collaborative-chat";
 import { TaskList } from "@/components/task-list";
 import { SedonaRelease, type SedonaMessage } from "@/components/sedona-release";
 import { BottomNav, type NavTab } from "@/components/bottom-nav";
@@ -149,7 +149,7 @@ export default function Home() {
 
   // Send message mutation
   const sendMessage = useMutation({
-    mutationFn: async (data: { sessionId: string; message: string }) => {
+    mutationFn: async (data: { sessionId: string; message: string; images?: ImageAttachment[] }) => {
       const response = await apiRequest("POST", "/api/chat", data);
       return response.json();
     },
@@ -240,13 +240,14 @@ export default function Home() {
   }, [createSession, toast]);
 
   // Handle chat message
-  const handleSendMessage = useCallback(async (content: string) => {
+  const handleSendMessage = useCallback(async (content: string, images?: ImageAttachment[]) => {
     if (!sessionId) return;
     
     const userMessage: Message = {
       id: Date.now().toString(),
       role: "user",
       content,
+      images,
     };
     setMessages((prev) => [...prev, userMessage]);
     setIsLoading(true);
@@ -254,7 +255,8 @@ export default function Home() {
     try {
       const response = await sendMessage.mutateAsync({ 
         sessionId, 
-        message: content 
+        message: content,
+        images,
       });
       
       const assistantMessage: Message = {
