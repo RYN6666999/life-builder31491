@@ -10,9 +10,19 @@ import { MonumentVisualization } from "@/components/monument-visualization";
 import { hapticSuccess } from "@/lib/haptics";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import { saveConversation, loadConversation, clearConversation, captureCurrentState, loadHistory, clearHistory } from "@/lib/storage";
+import { 
+  saveConversation, 
+  loadConversation, 
+  clearConversation, 
+  saveOrMergeProject,
+  loadProjects,
+  archiveProject,
+  deleteProject,
+  clearAllProjects,
+  type Project 
+} from "@/lib/storage";
 import { HistoryView } from "@/components/history-view";
-import type { MonumentConfig } from "@/lib/monuments";
+import { MONUMENTS, type MonumentConfig } from "@/lib/monuments";
 import type { Task, Monument, Session } from "@shared/schema";
 import confetti from "canvas-confetti";
 
@@ -39,6 +49,7 @@ export default function Home() {
   const [selectedMonument, setSelectedMonument] = useState<MonumentConfig | null>(null);
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [previousFlow, setPreviousFlow] = useState<FlowHistory | null>(null);
+  const [activeProjectId, setActiveProjectId] = useState<string | null>(null);
   
   // Chat state
   const [messages, setMessages] = useState<Message[]>([]);
@@ -50,6 +61,9 @@ export default function Home() {
   const [sedonaComplete, setSedonaComplete] = useState(false);
   const [showModeSwitchPrompt, setShowModeSwitchPrompt] = useState(false);
   const [switchReason, setSwitchReason] = useState<string | undefined>();
+  
+  // Projects refresh trigger
+  const [projectsRefresh, setProjectsRefresh] = useState(0);
 
   // Load saved conversation on mount
   useEffect(() => {
@@ -63,9 +77,10 @@ export default function Home() {
     }
   }, []);
 
-  // Auto-save conversation whenever it changes
+  // Auto-save conversation and project whenever it changes
   useEffect(() => {
     if (flowStep !== "state-check" && (messages.length > 0 || sedonaMessages.length > 0)) {
+      // Save current session cache
       saveConversation({
         flowStep,
         flowType,
@@ -75,27 +90,28 @@ export default function Home() {
         sedonaMessages,
         sedonaStep,
         timestamp: Date.now(),
+        activeProjectId: activeProjectId || undefined,
       });
-    }
-  }, [flowStep, flowType, messages, sedonaMessages, sedonaStep, selectedMonument]);
-
-  // Auto-capture history every 10 seconds
-  useEffect(() => {
-    if (flowStep === "state-check") return;
-    
-    const interval = setInterval(() => {
-      captureCurrentState(
+      
+      // Save/merge into project (every message update)
+      const type = flowStep === "sedona" ? "sedona" : "chat";
+      const projectId = saveOrMergeProject(
+        type,
         flowStep,
         flowType,
         messages,
         sedonaMessages,
+        sedonaStep,
+        selectedMonument?.id,
         selectedMonument?.nameCn,
-        selectedMonument?.id
+        selectedMonument?.slug,
+        activeProjectId || undefined
       );
-    }, 10000); // Every 10 seconds
-
-    return () => clearInterval(interval);
-  }, [flowStep, flowType, messages, sedonaMessages, selectedMonument]);
+      if (projectId && projectId !== activeProjectId) {
+        setActiveProjectId(projectId);
+      }
+    }
+  }, [flowStep, flowType, messages, sedonaMessages, sedonaStep, selectedMonument, activeProjectId]);
 
   // Fetch monuments
   const { data: monuments = [] } = useQuery<Monument[]>({
@@ -441,13 +457,44 @@ export default function Home() {
     }
 
     if (activeTab === "history") {
-      const historyEntries = loadHistory();
+      const projects = loadProjects();
       return (
         <HistoryView
-          entries={historyEntries}
-          onClear={() => {
-            clearHistory();
-            queryClient.invalidateQueries();
+          projects={projects}
+          onResumeProject={(project) => {
+            // Restore project state
+            setFlowStep(project.flowStep as FlowStep);
+            setFlowType(project.flowType);
+            setMessages(project.messages);
+            setSedonaMessages(project.sedonaMessages);
+            setSedonaStep(project.sedonaStep);
+            setActiveProjectId(project.id);
+            
+            // Restore monument if exists
+            if (project.monumentSlug) {
+              const monument = MONUMENTS.find(m => m.slug === project.monumentSlug);
+              if (monument) {
+                setSelectedMonument(monument);
+              }
+            }
+            
+            setActiveTab("home");
+            toast({
+              title: "專案已恢復",
+              description: `繼續「${project.title}」`,
+            });
+          }}
+          onArchiveProject={(projectId) => {
+            archiveProject(projectId);
+            setProjectsRefresh(prev => prev + 1);
+          }}
+          onDeleteProject={(projectId) => {
+            deleteProject(projectId);
+            setProjectsRefresh(prev => prev + 1);
+          }}
+          onClearAll={() => {
+            clearAllProjects();
+            setProjectsRefresh(prev => prev + 1);
           }}
         />
       );
