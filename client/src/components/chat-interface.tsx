@@ -120,8 +120,14 @@ export function ChatInterface({
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
+    // Scroll to bottom on every message change
     if (scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+      // Use setTimeout to ensure DOM has updated
+      setTimeout(() => {
+        if (scrollRef.current) {
+          scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+        }
+      }, 0);
     }
   }, [messages, isLoading]);
 

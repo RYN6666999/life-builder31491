@@ -28,6 +28,8 @@ interface SedonaReleaseProps {
   onComplete: () => void;
   onSwitchToCreation?: () => void;
   onDismissSwitch?: () => void;
+  onBackToPreviousFlow?: () => void;
+  hasPreviousFlow?: boolean;
 }
 
 function TypingIndicator() {
@@ -116,6 +118,8 @@ export function SedonaRelease({
   onComplete,
   onSwitchToCreation,
   onDismissSwitch,
+  onBackToPreviousFlow,
+  hasPreviousFlow,
 }: SedonaReleaseProps) {
   const [input, setInput] = useState("");
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -175,7 +179,7 @@ export function SedonaRelease({
         </div>
       </ScrollArea>
 
-      {/* Mode Switch Prompt */}
+      {/* Mode Switch Prompt or Previous Flow Button */}
       {showModeSwitchPrompt && !isComplete && (
         <div className="px-4 py-4 border-t border-blue-500/30 bg-gradient-to-r from-blue-900/20 to-blue-800/10">
           <div className="flex items-center gap-3 mb-3">
@@ -196,16 +200,30 @@ export function SedonaRelease({
             >
               繼續調頻
             </Button>
-            <Button
-              className="flex-1 bg-gradient-to-r from-blue-600 to-blue-700"
-              onClick={() => {
-                hapticSuccess();
-                onSwitchToCreation?.();
-              }}
-              data-testid="button-switch-creation"
-            >
-              開始創造
-            </Button>
+            {hasPreviousFlow ? (
+              <Button
+                variant="outline"
+                className="flex-1 border-amber-500/30 text-amber-400"
+                onClick={() => {
+                  hapticLight();
+                  onBackToPreviousFlow?.();
+                }}
+                data-testid="button-back-to-previous"
+              >
+                返回目標設定
+              </Button>
+            ) : (
+              <Button
+                className="flex-1 bg-gradient-to-r from-blue-600 to-blue-700"
+                onClick={() => {
+                  hapticSuccess();
+                  onSwitchToCreation?.();
+                }}
+                data-testid="button-switch-creation"
+              >
+                開始創造
+              </Button>
+            )}
           </div>
         </div>
       )}

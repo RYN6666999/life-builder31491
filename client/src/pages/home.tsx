@@ -24,6 +24,12 @@ interface MonumentProgress {
   level: number;
 }
 
+interface FlowHistory {
+  step: FlowStep;
+  monument?: MonumentConfig;
+  flowType?: "mood" | "task";
+}
+
 export default function Home() {
   const { toast } = useToast();
   const [activeTab, setActiveTab] = useState<NavTab>("home");
@@ -31,6 +37,7 @@ export default function Home() {
   const [flowType, setFlowType] = useState<"mood" | "task" | null>(null);
   const [selectedMonument, setSelectedMonument] = useState<MonumentConfig | null>(null);
   const [sessionId, setSessionId] = useState<string | null>(null);
+  const [previousFlow, setPreviousFlow] = useState<FlowHistory | null>(null);
   
   // Chat state
   const [messages, setMessages] = useState<Message[]>([]);
@@ -174,6 +181,7 @@ export default function Home() {
 
   // Handle monument selection
   const handleMonumentSelect = useCallback((monument: MonumentConfig) => {
+    setPreviousFlow({ step: "monument-selection", monument, flowType: "task" });
     setSelectedMonument(monument);
     setFlowStep("chat");
     // Initialize chat
@@ -323,7 +331,23 @@ export default function Home() {
     setSedonaComplete(false);
     setShowModeSwitchPrompt(false);
     setSwitchReason(undefined);
+    setPreviousFlow(null);
   }, []);
+
+  // Handle back to previous flow
+  const handleBackToPreviousFlow = useCallback(() => {
+    if (previousFlow) {
+      setFlowStep(previousFlow.step);
+      if (previousFlow.monument) {
+        setSelectedMonument(previousFlow.monument);
+      }
+      if (previousFlow.flowType) {
+        setFlowType(previousFlow.flowType);
+      }
+      setShowModeSwitchPrompt(false);
+      setSwitchReason(undefined);
+    }
+  }, [previousFlow]);
 
   // Handle switch from Sedona to Creation mode
   const handleSwitchToCreation = useCallback(() => {
@@ -469,6 +493,8 @@ export default function Home() {
             onComplete={handleSedonaComplete}
             onSwitchToCreation={handleSwitchToCreation}
             onDismissSwitch={handleDismissSwitch}
+            onBackToPreviousFlow={handleBackToPreviousFlow}
+            hasPreviousFlow={!!previousFlow}
           />
         );
       
