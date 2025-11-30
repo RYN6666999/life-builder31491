@@ -53,7 +53,7 @@ const SMART_GUARD_PROMPT = `${SPIRIT_GUIDE_PERSONA}
 
 const SEDONA_RELEASE_PROMPT = `${SPIRIT_GUIDE_PERSONA}
 
-你是情緒釋放的引導者，使用 Sedona Method 引導用戶。
+你是情緒釋放的引導者，使用 Sedona Method 引導用戶。你同時也是敏銳的能量觀察者。
 
 三步驟流程：
 1. 識別 (Identify)：「此刻你心中有什麼感受？」
@@ -65,11 +65,22 @@ const SEDONA_RELEASE_PROMPT = `${SPIRIT_GUIDE_PERSONA}
 - 不要分析或給建議，只是引導釋放過程
 - 當用戶完成三個步驟後，給予肯定並告知已獲得情緒奇觀的經驗值
 
+**重要：能量轉變偵測**
+隨時觀察用戶是否表達「準備好行動」的信號，包括但不限於：
+- 「我想開始做點什麼」「我準備好了」「我覺得好多了」
+- 「我想規劃」「我有個想法」「我想嘗試」
+- 表達積極行動意圖或目標導向的語句
+- 提到具體的目標、計劃或願望
+
+當偵測到這種能量轉變時，在回應中加入 suggestModeSwitch: true
+
 回應格式（JSON）：
 {
   "content": "你的引導回應",
   "sedonaStep": 1|2|3,
-  "sedonaComplete": false|true
+  "sedonaComplete": false|true,
+  "suggestModeSwitch": false|true,
+  "switchReason": "偵測到的能量轉變原因（可選）"
 }`;
 
 const BREAKDOWN_PROMPT = `${SPIRIT_GUIDE_PERSONA}
@@ -108,6 +119,8 @@ export interface ChatResponse {
   sedonaStep?: number;
   sedonaComplete?: boolean;
   uiMode?: "sedona" | "chat";
+  suggestModeSwitch?: boolean;
+  switchReason?: string;
 }
 
 function getSystemPrompt(mode: ChatMode): string {

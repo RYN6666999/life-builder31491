@@ -39,6 +39,8 @@ export default function Home() {
   const [sedonaMessages, setSedonaMessages] = useState<SedonaMessage[]>([]);
   const [sedonaStep, setSedonaStep] = useState(1);
   const [sedonaComplete, setSedonaComplete] = useState(false);
+  const [showModeSwitchPrompt, setShowModeSwitchPrompt] = useState(false);
+  const [switchReason, setSwitchReason] = useState<string | undefined>();
 
   // Fetch monuments
   const { data: monuments = [] } = useQuery<Monument[]>({
@@ -241,12 +243,24 @@ export default function Home() {
         role: "assistant",
         content: response.content,
         step: response.sedonaStep || sedonaStep,
+        suggestModeSwitch: response.suggestModeSwitch,
+        switchReason: response.switchReason,
       };
       setSedonaMessages((prev) => [...prev, assistantMessage]);
       
       // Update step
       if (response.sedonaStep) {
         setSedonaStep(response.sedonaStep);
+      }
+      
+      // Check if AI detected mode switch intent
+      if (response.suggestModeSwitch) {
+        setShowModeSwitchPrompt(true);
+        setSwitchReason(response.switchReason);
+      } else {
+        // Clear prompt if AI no longer suggests switching
+        setShowModeSwitchPrompt(false);
+        setSwitchReason(undefined);
       }
       
       // Check if complete
@@ -278,6 +292,33 @@ export default function Home() {
     setSedonaMessages([]);
     setSedonaStep(1);
     setSedonaComplete(false);
+    setShowModeSwitchPrompt(false);
+    setSwitchReason(undefined);
+  }, []);
+
+  // Handle switch from Sedona to Creation mode
+  const handleSwitchToCreation = useCallback(() => {
+    setFlowStep("monument-selection");
+    setFlowType("task");
+    setSedonaMessages([]);
+    setSedonaStep(1);
+    setSedonaComplete(false);
+    setShowModeSwitchPrompt(false);
+    setSwitchReason(undefined);
+    
+    // Create a new task session
+    createSession.mutate({ flowType: "task" });
+    
+    toast({
+      title: "能量轉換成功",
+      description: "讓我們開始創造吧！",
+    });
+  }, [createSession, toast]);
+
+  // Handle dismissing mode switch prompt to continue Sedona
+  const handleDismissSwitch = useCallback(() => {
+    setShowModeSwitchPrompt(false);
+    setSwitchReason(undefined);
   }, []);
 
   // Handle tab change
@@ -392,9 +433,13 @@ export default function Home() {
             isLoading={isLoading}
             currentStep={sedonaStep}
             isComplete={sedonaComplete}
+            showModeSwitchPrompt={showModeSwitchPrompt}
+            switchReason={switchReason}
             onSendMessage={handleSedonaMessage}
             onBack={handleBack}
             onComplete={handleSedonaComplete}
+            onSwitchToCreation={handleSwitchToCreation}
+            onDismissSwitch={handleDismissSwitch}
           />
         );
       

@@ -308,6 +308,12 @@ export async function registerRoutes(
       if (mode === "sedona") {
         result.sedonaStep = response.sedonaStep;
         result.sedonaComplete = response.sedonaComplete;
+        
+        // Check if AI detected user wants to switch to creation mode
+        if (response.suggestModeSwitch) {
+          result.suggestModeSwitch = true;
+          result.switchReason = response.switchReason || "偵測到你準備好開始創造了";
+        }
       }
 
       // Check if we should switch UI mode

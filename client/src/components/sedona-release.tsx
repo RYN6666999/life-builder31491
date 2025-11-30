@@ -12,6 +12,8 @@ export interface SedonaMessage {
   role: "user" | "assistant";
   content: string;
   step?: number; // 1: Identify, 2: Allow, 3: Release
+  suggestModeSwitch?: boolean;
+  switchReason?: string;
 }
 
 interface SedonaReleaseProps {
@@ -19,9 +21,13 @@ interface SedonaReleaseProps {
   isLoading: boolean;
   currentStep: number; // 1-3
   isComplete: boolean;
+  showModeSwitchPrompt?: boolean;
+  switchReason?: string;
   onSendMessage: (message: string) => void;
   onBack: () => void;
   onComplete: () => void;
+  onSwitchToCreation?: () => void;
+  onDismissSwitch?: () => void;
 }
 
 function TypingIndicator() {
@@ -103,9 +109,13 @@ export function SedonaRelease({
   isLoading,
   currentStep,
   isComplete,
+  showModeSwitchPrompt,
+  switchReason,
   onSendMessage,
   onBack,
   onComplete,
+  onSwitchToCreation,
+  onDismissSwitch,
 }: SedonaReleaseProps) {
   const [input, setInput] = useState("");
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -165,6 +175,41 @@ export function SedonaRelease({
         </div>
       </ScrollArea>
 
+      {/* Mode Switch Prompt */}
+      {showModeSwitchPrompt && !isComplete && (
+        <div className="px-4 py-4 border-t border-blue-500/30 bg-gradient-to-r from-blue-900/20 to-blue-800/10">
+          <div className="flex items-center gap-3 mb-3">
+            <Sparkles className="w-6 h-6 text-blue-400" />
+            <p className="text-sm text-foreground">
+              {switchReason || "感覺到你準備好開始創造了"}
+            </p>
+          </div>
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              className="flex-1 border-muted-foreground/20"
+              onClick={() => {
+                hapticLight();
+                onDismissSwitch?.();
+              }}
+              data-testid="button-stay-sedona"
+            >
+              繼續調頻
+            </Button>
+            <Button
+              className="flex-1 bg-gradient-to-r from-blue-600 to-blue-700"
+              onClick={() => {
+                hapticSuccess();
+                onSwitchToCreation?.();
+              }}
+              data-testid="button-switch-creation"
+            >
+              開始創造
+            </Button>
+          </div>
+        </div>
+      )}
+
       {/* Completion State */}
       {isComplete ? (
         <div className="px-4 py-6 border-t border-border bg-gradient-to-r from-purple-900/20 to-purple-800/10">
@@ -188,7 +233,7 @@ export function SedonaRelease({
             繼續
           </Button>
         </div>
-      ) : (
+      ) : !showModeSwitchPrompt && (
         <form
           onSubmit={handleSubmit}
           className="px-4 py-3 border-t border-border bg-background safe-area-inset-bottom"
