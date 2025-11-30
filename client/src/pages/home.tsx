@@ -10,6 +10,7 @@ import { MonumentVisualization } from "@/components/monument-visualization";
 import { hapticSuccess } from "@/lib/haptics";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { saveConversation, loadConversation, clearConversation } from "@/lib/storage";
 import type { MonumentConfig } from "@/lib/monuments";
 import type { Task, Monument, Session } from "@shared/schema";
 import confetti from "canvas-confetti";
@@ -41,6 +42,34 @@ export default function Home() {
   const [sedonaComplete, setSedonaComplete] = useState(false);
   const [showModeSwitchPrompt, setShowModeSwitchPrompt] = useState(false);
   const [switchReason, setSwitchReason] = useState<string | undefined>();
+
+  // Load saved conversation on mount
+  useEffect(() => {
+    const cached = loadConversation();
+    if (cached) {
+      setFlowStep(cached.flowStep as FlowStep);
+      setFlowType(cached.flowType);
+      setMessages(cached.messages);
+      setSedonaMessages(cached.sedonaMessages);
+      setSedonaStep(cached.sedonaStep);
+    }
+  }, []);
+
+  // Auto-save conversation whenever it changes
+  useEffect(() => {
+    if (flowStep !== "state-check" && (messages.length > 0 || sedonaMessages.length > 0)) {
+      saveConversation({
+        flowStep,
+        flowType,
+        monumentId: selectedMonument?.id,
+        monumentName: selectedMonument?.nameCn,
+        messages,
+        sedonaMessages,
+        sedonaStep,
+        timestamp: Date.now(),
+      });
+    }
+  }, [flowStep, flowType, messages, sedonaMessages, sedonaStep, selectedMonument]);
 
   // Fetch monuments
   const { data: monuments = [] } = useQuery<Monument[]>({
