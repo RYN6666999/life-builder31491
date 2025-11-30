@@ -55,19 +55,27 @@ export default function Settings() {
       const response = await apiRequest("PATCH", "/api/settings", updates);
       return response.json();
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/settings"] });
-      toast({
-        title: "設定已儲存",
-        description: "你的偏好設定已更新",
+    onMutate: async (updates) => {
+      await queryClient.cancelQueries({ queryKey: ["/api/settings"] });
+      const previousSettings = queryClient.getQueryData<UserSettings>(["/api/settings"]);
+      queryClient.setQueryData<UserSettings>(["/api/settings"], (old) => {
+        if (!old) return old;
+        return { ...old, ...updates };
       });
+      return { previousSettings };
     },
-    onError: () => {
+    onError: (_err, _updates, context) => {
+      if (context?.previousSettings) {
+        queryClient.setQueryData(["/api/settings"], context.previousSettings);
+      }
       toast({
         title: "儲存失敗",
         description: "請稍後再試",
         variant: "destructive",
       });
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/settings"] });
     },
   });
 
