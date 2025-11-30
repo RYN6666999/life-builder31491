@@ -63,7 +63,7 @@ export async function registerRoutes(
   app.post("/api/tasks", async (req, res) => {
     try {
       const validated = insertTaskSchema.parse(req.body);
-      const task = await storage.createTask(validated);
+      const task = await storage.createTask(validated as any);
       res.status(201).json(task);
     } catch (error) {
       console.error("Error creating task:", error);
@@ -137,7 +137,7 @@ export async function registerRoutes(
   app.post("/api/sessions", async (req, res) => {
     try {
       const validated = insertSessionSchema.parse(req.body);
-      const session = await storage.createSession(validated);
+      const session = await storage.createSession(validated as any);
       res.status(201).json(session);
     } catch (error) {
       console.error("Error creating session:", error);
