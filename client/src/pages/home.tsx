@@ -10,7 +10,8 @@ import { MonumentVisualization } from "@/components/monument-visualization";
 import { hapticSuccess } from "@/lib/haptics";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import { saveConversation, loadConversation, clearConversation } from "@/lib/storage";
+import { saveConversation, loadConversation, clearConversation, captureCurrentState, loadHistory, clearHistory } from "@/lib/storage";
+import { HistoryView } from "@/components/history-view";
 import type { MonumentConfig } from "@/lib/monuments";
 import type { Task, Monument, Session } from "@shared/schema";
 import confetti from "canvas-confetti";
@@ -77,6 +78,24 @@ export default function Home() {
       });
     }
   }, [flowStep, flowType, messages, sedonaMessages, sedonaStep, selectedMonument]);
+
+  // Auto-capture history every 10 seconds
+  useEffect(() => {
+    if (flowStep === "state-check") return;
+    
+    const interval = setInterval(() => {
+      captureCurrentState(
+        flowStep,
+        flowType,
+        messages,
+        sedonaMessages,
+        selectedMonument?.nameCn,
+        selectedMonument?.id
+      );
+    }, 10000); // Every 10 seconds
+
+    return () => clearInterval(interval);
+  }, [flowStep, flowType, messages, sedonaMessages, selectedMonument]);
 
   // Fetch monuments
   const { data: monuments = [] } = useQuery<Monument[]>({
@@ -422,10 +441,15 @@ export default function Home() {
     }
 
     if (activeTab === "history") {
+      const historyEntries = loadHistory();
       return (
-        <div className="flex flex-col items-center justify-center min-h-[calc(100vh-120px)] px-4">
-          <p className="text-muted-foreground">歷史記錄功能即將推出</p>
-        </div>
+        <HistoryView
+          entries={historyEntries}
+          onClear={() => {
+            clearHistory();
+            queryClient.invalidateQueries();
+          }}
+        />
       );
     }
 
