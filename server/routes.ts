@@ -2,7 +2,7 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage, initializeMonuments } from "./storage";
 import { chat, classifyIntent, type ChatMode } from "./gemini";
-import { insertTaskSchema, insertSessionSchema } from "@shared/schema";
+import { insertTaskSchema, insertSessionSchema, insertUserSettingsSchema } from "@shared/schema";
 import { z } from "zod";
 
 export async function registerRoutes(
@@ -546,6 +546,53 @@ export async function registerRoutes(
     } catch (error) {
       console.error("Error in chat:", error);
       res.status(500).json({ error: "Failed to process chat" });
+    }
+  });
+
+  // ============ USER SETTINGS ============
+
+  // Get user settings
+  app.get("/api/settings", async (req, res) => {
+    try {
+      let settings = await storage.getUserSettings();
+      if (!settings) {
+        settings = await storage.createOrUpdateUserSettings({
+          nickname: "來地球玩的大師",
+          aiPersona: "spiritual",
+          theme: "dark",
+        });
+      }
+      res.json(settings);
+    } catch (error) {
+      console.error("Error fetching settings:", error);
+      res.status(500).json({ error: "Failed to fetch settings" });
+    }
+  });
+
+  // Update user settings
+  app.patch("/api/settings", async (req, res) => {
+    try {
+      const settings = await storage.createOrUpdateUserSettings(req.body);
+      res.json(settings);
+    } catch (error) {
+      console.error("Error updating settings:", error);
+      res.status(500).json({ error: "Failed to update settings" });
+    }
+  });
+
+  // Export user data for cloud backup
+  app.get("/api/settings/export", async (req, res) => {
+    try {
+      const data = await storage.exportUserData();
+      const settings = await storage.getUserSettings();
+      res.json({
+        settings,
+        ...data,
+        exportedAt: new Date().toISOString(),
+      });
+    } catch (error) {
+      console.error("Error exporting data:", error);
+      res.status(500).json({ error: "Failed to export data" });
     }
   });
 

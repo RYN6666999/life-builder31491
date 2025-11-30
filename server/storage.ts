@@ -1,9 +1,10 @@
 import { 
-  users, tasks, monuments, sessions,
+  users, tasks, monuments, sessions, userSettings,
   type User, type InsertUser, 
   type Task, type InsertTask,
   type Monument, type InsertMonument,
-  type Session, type InsertSession
+  type Session, type InsertSession,
+  type UserSettings, type InsertUserSettings
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, isNull, asc, inArray } from "drizzle-orm";
@@ -40,6 +41,11 @@ export interface IStorage {
   getSession(id: string): Promise<Session | undefined>;
   createSession(session: InsertSession): Promise<Session>;
   updateSession(id: string, updates: Partial<Session>): Promise<Session>;
+  
+  // User Settings
+  getUserSettings(): Promise<UserSettings | undefined>;
+  createOrUpdateUserSettings(settings: Partial<InsertUserSettings>): Promise<UserSettings>;
+  exportUserData(): Promise<{ sessions: Session[]; tasks: Task[]; monuments: Monument[] }>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -227,6 +233,38 @@ export class DatabaseStorage implements IStorage {
       .where(eq(sessions.id, id))
       .returning();
     return updated;
+  }
+
+  // User Settings
+  async getUserSettings(): Promise<UserSettings | undefined> {
+    const [settings] = await db.select().from(userSettings);
+    return settings || undefined;
+  }
+
+  async createOrUpdateUserSettings(settings: Partial<InsertUserSettings>): Promise<UserSettings> {
+    const existing = await this.getUserSettings();
+    
+    if (existing) {
+      const [updated] = await db
+        .update(userSettings)
+        .set({ ...settings, updatedAt: new Date() })
+        .where(eq(userSettings.id, existing.id))
+        .returning();
+      return updated;
+    } else {
+      const [created] = await db
+        .insert(userSettings)
+        .values(settings as InsertUserSettings)
+        .returning();
+      return created;
+    }
+  }
+
+  async exportUserData(): Promise<{ sessions: Session[]; tasks: Task[]; monuments: Monument[] }> {
+    const allSessions = await db.select().from(sessions);
+    const allTasks = await db.select().from(tasks);
+    const allMonuments = await db.select().from(monuments);
+    return { sessions: allSessions, tasks: allTasks, monuments: allMonuments };
   }
 }
 

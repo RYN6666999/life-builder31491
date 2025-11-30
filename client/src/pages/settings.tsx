@@ -1,0 +1,472 @@
+import { useState } from "react";
+import { useQuery, useMutation } from "@tanstack/react-query";
+import { useLocation } from "wouter";
+import { ChevronLeft, User, Palette, Key, Cloud, Plug, Sun, Moon, Check, Upload, Download } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Switch } from "@/components/ui/switch";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Textarea } from "@/components/ui/textarea";
+import { useToast } from "@/hooks/use-toast";
+import { queryClient, apiRequest } from "@/lib/queryClient";
+import type { UserSettings } from "@shared/schema";
+
+const AI_PERSONAS = [
+  {
+    id: "spiritual",
+    name: "靈性導師",
+    description: "數據指導靈 - 以靈性視角引導你探索內在，將情緒與行動視為可轉化的能量",
+    icon: "✨",
+  },
+  {
+    id: "coach",
+    name: "人生教練",
+    description: "專業教練 - 以目標導向的方式，幫助你制定計劃並保持動力",
+    icon: "🎯",
+  },
+  {
+    id: "pm",
+    name: "專案經理",
+    description: "項目管理專家 - 以結構化的方式拆解任務，追蹤進度並確保交付",
+    icon: "📋",
+  },
+  {
+    id: "custom",
+    name: "自訂人設",
+    description: "創建你自己的 AI 助手人設",
+    icon: "🎭",
+  },
+];
+
+export default function Settings() {
+  const [, setLocation] = useLocation();
+  const { toast } = useToast();
+  const [customPrompt, setCustomPrompt] = useState("");
+
+  const { data: settings, isLoading } = useQuery<UserSettings>({
+    queryKey: ["/api/settings"],
+  });
+
+  const updateSettings = useMutation({
+    mutationFn: async (updates: Partial<UserSettings>) => {
+      const response = await apiRequest("PATCH", "/api/settings", updates);
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/settings"] });
+      toast({
+        title: "設定已儲存",
+        description: "你的偏好設定已更新",
+      });
+    },
+    onError: () => {
+      toast({
+        title: "儲存失敗",
+        description: "請稍後再試",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const exportData = useMutation({
+    mutationFn: async () => {
+      const response = await apiRequest("GET", "/api/settings/export", undefined);
+      return response.json();
+    },
+    onSuccess: (data) => {
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `lifebuilder-backup-${new Date().toISOString().split("T")[0]}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast({
+        title: "資料已匯出",
+        description: "備份檔案已下載",
+      });
+    },
+  });
+
+  const handleThemeChange = (theme: string) => {
+    updateSettings.mutate({ theme });
+    if (theme === "dark") {
+      document.documentElement.classList.add("dark");
+    } else {
+      document.documentElement.classList.remove("dark");
+    }
+  };
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-screen bg-background">
+        <div className="animate-pulse text-muted-foreground">載入中...</div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-background">
+      <header className="sticky top-0 z-50 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+        <div className="flex items-center gap-2 p-4 max-w-lg mx-auto">
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => setLocation("/")}
+            data-testid="button-back"
+          >
+            <ChevronLeft className="h-5 w-5" />
+          </Button>
+          <h1 className="text-lg font-semibold">設定</h1>
+        </div>
+      </header>
+
+      <main className="max-w-lg mx-auto p-4 pb-20">
+        <Tabs defaultValue="profile" className="space-y-6">
+          <TabsList className="grid grid-cols-5 w-full">
+            <TabsTrigger value="profile" data-testid="tab-profile">
+              <User className="h-4 w-4" />
+            </TabsTrigger>
+            <TabsTrigger value="theme" data-testid="tab-theme">
+              <Palette className="h-4 w-4" />
+            </TabsTrigger>
+            <TabsTrigger value="api" data-testid="tab-api">
+              <Key className="h-4 w-4" />
+            </TabsTrigger>
+            <TabsTrigger value="cloud" data-testid="tab-cloud">
+              <Cloud className="h-4 w-4" />
+            </TabsTrigger>
+            <TabsTrigger value="mcp" data-testid="tab-mcp">
+              <Plug className="h-4 w-4" />
+            </TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="profile" className="space-y-4">
+            <Card>
+              <CardHeader>
+                <CardTitle>個人資料</CardTitle>
+                <CardDescription>設定你的暱稱和 AI 助手的人設</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                <div className="space-y-2">
+                  <Label htmlFor="nickname">暱稱</Label>
+                  <Input
+                    id="nickname"
+                    data-testid="input-nickname"
+                    defaultValue={settings?.nickname || "來地球玩的大師"}
+                    onBlur={(e) => updateSettings.mutate({ nickname: e.target.value })}
+                    placeholder="輸入你的暱稱"
+                  />
+                  <p className="text-sm text-muted-foreground">
+                    AI 會用這個名字稱呼你
+                  </p>
+                </div>
+
+                <div className="space-y-4">
+                  <Label>AI 人設</Label>
+                  <RadioGroup
+                    value={settings?.aiPersona || "spiritual"}
+                    onValueChange={(value) => updateSettings.mutate({ aiPersona: value as any })}
+                    className="space-y-3"
+                  >
+                    {AI_PERSONAS.map((persona) => (
+                      <div
+                        key={persona.id}
+                        className="flex items-start space-x-3 p-3 rounded-lg border hover-elevate cursor-pointer"
+                        onClick={() => updateSettings.mutate({ aiPersona: persona.id as any })}
+                        data-testid={`radio-persona-${persona.id}`}
+                      >
+                        <RadioGroupItem value={persona.id} id={persona.id} className="mt-1" />
+                        <div className="flex-1">
+                          <Label htmlFor={persona.id} className="flex items-center gap-2 cursor-pointer">
+                            <span>{persona.icon}</span>
+                            <span className="font-medium">{persona.name}</span>
+                          </Label>
+                          <p className="text-sm text-muted-foreground mt-1">
+                            {persona.description}
+                          </p>
+                        </div>
+                      </div>
+                    ))}
+                  </RadioGroup>
+                </div>
+
+                {settings?.aiPersona === "custom" && (
+                  <div className="space-y-2">
+                    <Label htmlFor="custom-prompt">自訂人設提示</Label>
+                    <Textarea
+                      id="custom-prompt"
+                      data-testid="input-custom-prompt"
+                      placeholder="描述你想要的 AI 助手人設..."
+                      value={customPrompt || settings?.customPersonaPrompt || ""}
+                      onChange={(e) => setCustomPrompt(e.target.value)}
+                      onBlur={(e) => updateSettings.mutate({ customPersonaPrompt: e.target.value })}
+                      className="min-h-[120px]"
+                    />
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="theme" className="space-y-4">
+            <Card>
+              <CardHeader>
+                <CardTitle>外觀主題</CardTitle>
+                <CardDescription>選擇你喜歡的介面風格</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-2 gap-4">
+                  <button
+                    className={`p-4 rounded-lg border-2 transition-all ${
+                      settings?.theme === "dark"
+                        ? "border-primary bg-primary/10"
+                        : "border-border hover-elevate"
+                    }`}
+                    onClick={() => handleThemeChange("dark")}
+                    data-testid="button-theme-dark"
+                  >
+                    <div className="flex flex-col items-center gap-3">
+                      <div className="w-12 h-12 rounded-full bg-slate-900 flex items-center justify-center">
+                        <Moon className="h-6 w-6 text-slate-100" />
+                      </div>
+                      <span className="font-medium">深色模式</span>
+                      {settings?.theme === "dark" && (
+                        <Check className="h-4 w-4 text-primary" />
+                      )}
+                    </div>
+                  </button>
+                  <button
+                    className={`p-4 rounded-lg border-2 transition-all ${
+                      settings?.theme === "light"
+                        ? "border-primary bg-primary/10"
+                        : "border-border hover-elevate"
+                    }`}
+                    onClick={() => handleThemeChange("light")}
+                    data-testid="button-theme-light"
+                  >
+                    <div className="flex flex-col items-center gap-3">
+                      <div className="w-12 h-12 rounded-full bg-amber-100 flex items-center justify-center">
+                        <Sun className="h-6 w-6 text-amber-600" />
+                      </div>
+                      <span className="font-medium">淺色模式</span>
+                      {settings?.theme === "light" && (
+                        <Check className="h-4 w-4 text-primary" />
+                      )}
+                    </div>
+                  </button>
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="api" className="space-y-4">
+            <Card>
+              <CardHeader>
+                <CardTitle>API 金鑰</CardTitle>
+                <CardDescription>設定你自己的 API 金鑰以使用進階功能</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                <div className="space-y-2">
+                  <Label htmlFor="gemini-key">Gemini API Key</Label>
+                  <Input
+                    id="gemini-key"
+                    data-testid="input-gemini-key"
+                    type="password"
+                    placeholder="輸入你的 Gemini API Key"
+                    defaultValue={settings?.customApiKeys?.gemini || ""}
+                    onBlur={(e) =>
+                      updateSettings.mutate({
+                        customApiKeys: {
+                          ...settings?.customApiKeys,
+                          gemini: e.target.value,
+                        },
+                      })
+                    }
+                  />
+                  <p className="text-sm text-muted-foreground">
+                    使用自己的金鑰可獲得更高的使用限制
+                  </p>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="perplexity-key">Perplexity API Key</Label>
+                  <Input
+                    id="perplexity-key"
+                    data-testid="input-perplexity-key"
+                    type="password"
+                    placeholder="輸入你的 Perplexity API Key"
+                    defaultValue={settings?.customApiKeys?.perplexity || ""}
+                    onBlur={(e) =>
+                      updateSettings.mutate({
+                        customApiKeys: {
+                          ...settings?.customApiKeys,
+                          perplexity: e.target.value,
+                        },
+                      })
+                    }
+                  />
+                  <p className="text-sm text-muted-foreground">
+                    用於網路搜尋功能
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="cloud" className="space-y-4">
+            <Card>
+              <CardHeader>
+                <CardTitle>雲端同步</CardTitle>
+                <CardDescription>將你的資料備份到雲端</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                <div className="flex items-center justify-between p-4 rounded-lg border">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-full bg-blue-500/10 flex items-center justify-center">
+                      <Cloud className="h-5 w-5 text-blue-500" />
+                    </div>
+                    <div>
+                      <p className="font-medium">Google Drive</p>
+                      <p className="text-sm text-muted-foreground">
+                        {settings?.googleDriveConnected
+                          ? "已連接"
+                          : "尚未連接"}
+                      </p>
+                    </div>
+                  </div>
+                  <Button
+                    variant={settings?.googleDriveConnected ? "outline" : "default"}
+                    size="sm"
+                    data-testid="button-connect-drive"
+                  >
+                    {settings?.googleDriveConnected ? "中斷連接" : "連接"}
+                  </Button>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <Button
+                    variant="outline"
+                    className="flex items-center gap-2"
+                    onClick={() => exportData.mutate()}
+                    disabled={exportData.isPending}
+                    data-testid="button-export"
+                  >
+                    <Download className="h-4 w-4" />
+                    匯出資料
+                  </Button>
+                  <Button
+                    variant="outline"
+                    className="flex items-center gap-2"
+                    data-testid="button-import"
+                  >
+                    <Upload className="h-4 w-4" />
+                    匯入資料
+                  </Button>
+                </div>
+
+                <p className="text-sm text-muted-foreground text-center">
+                  定期備份可確保你的資料安全
+                </p>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="mcp" className="space-y-4">
+            <Card>
+              <CardHeader>
+                <CardTitle>MCP 串連</CardTitle>
+                <CardDescription>連接外部服務以擴展 AI 功能</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="flex items-center justify-between p-4 rounded-lg border">
+                  <div className="flex-1">
+                    <p className="font-medium">系統文件搜尋</p>
+                    <p className="text-sm text-muted-foreground">
+                      允許 AI 搜尋你的本地文件
+                    </p>
+                  </div>
+                  <Switch
+                    checked={settings?.mcpSettings?.fileSearch || false}
+                    onCheckedChange={(checked) =>
+                      updateSettings.mutate({
+                        mcpSettings: {
+                          ...settings?.mcpSettings,
+                          fileSearch: checked,
+                        },
+                      })
+                    }
+                    data-testid="switch-file-search"
+                  />
+                </div>
+
+                <div className="flex items-center justify-between p-4 rounded-lg border">
+                  <div className="flex-1">
+                    <p className="font-medium">網路搜尋</p>
+                    <p className="text-sm text-muted-foreground">
+                      允許 AI 搜尋網路獲取最新資訊
+                    </p>
+                  </div>
+                  <Switch
+                    checked={settings?.mcpSettings?.webSearch || false}
+                    onCheckedChange={(checked) =>
+                      updateSettings.mutate({
+                        mcpSettings: {
+                          ...settings?.mcpSettings,
+                          webSearch: checked,
+                        },
+                      })
+                    }
+                    data-testid="switch-web-search"
+                  />
+                </div>
+
+                <div className="flex items-center justify-between p-4 rounded-lg border">
+                  <div className="flex-1">
+                    <p className="font-medium">行事曆整合</p>
+                    <p className="text-sm text-muted-foreground">
+                      {settings?.googleCalendarConnected
+                        ? "已連接 Google Calendar"
+                        : "連接 Google Calendar 以安排任務"}
+                    </p>
+                  </div>
+                  <Button
+                    variant={settings?.googleCalendarConnected ? "outline" : "default"}
+                    size="sm"
+                    data-testid="button-connect-calendar"
+                  >
+                    {settings?.googleCalendarConnected ? "已連接" : "連接"}
+                  </Button>
+                </div>
+
+                <div className="flex items-center justify-between p-4 rounded-lg border">
+                  <div className="flex-1">
+                    <p className="font-medium">鬧鐘提醒</p>
+                    <p className="text-sm text-muted-foreground">
+                      允許 AI 設定任務提醒
+                    </p>
+                  </div>
+                  <Switch
+                    checked={settings?.mcpSettings?.alarms || false}
+                    onCheckedChange={(checked) =>
+                      updateSettings.mutate({
+                        mcpSettings: {
+                          ...settings?.mcpSettings,
+                          alarms: checked,
+                        },
+                      })
+                    }
+                    data-testid="switch-alarms"
+                  />
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+        </Tabs>
+      </main>
+    </div>
+  );
+}

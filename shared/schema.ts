@@ -135,3 +135,39 @@ export const insertUserSchema = createInsertSchema(users).pick({
 
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type User = typeof users.$inferSelect;
+
+// AI Persona enum
+export const aiPersonaEnum = pgEnum("ai_persona", ["spiritual", "coach", "pm", "custom"]);
+
+// User Settings table
+export const userSettings = pgTable("user_settings", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  nickname: text("nickname").default("來地球玩的大師"),
+  aiPersona: aiPersonaEnum("ai_persona").notNull().default("spiritual"),
+  customPersonaPrompt: text("custom_persona_prompt"),
+  theme: text("theme").notNull().default("dark"),
+  googleDriveConnected: integer("google_drive_connected").notNull().default(0),
+  googleCalendarConnected: integer("google_calendar_connected").notNull().default(0),
+  webSearchEnabled: integer("web_search_enabled").notNull().default(0),
+  customApiKeys: jsonb("custom_api_keys").$type<{
+    gemini?: string;
+    perplexity?: string;
+  }>(),
+  mcpSettings: jsonb("mcp_settings").$type<{
+    fileSearch?: boolean;
+    webSearch?: boolean;
+    calendar?: boolean;
+    alarms?: boolean;
+  }>(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertUserSettingsSchema = createInsertSchema(userSettings).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type UserSettings = typeof userSettings.$inferSelect;
+export type InsertUserSettings = z.infer<typeof insertUserSettingsSchema>;

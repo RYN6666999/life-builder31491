@@ -1,8 +1,9 @@
-import { Home, Mountain, History, User } from "lucide-react";
+import { Home, Mountain, History, Settings } from "lucide-react";
+import { useLocation } from "wouter";
 import { hapticLight } from "@/lib/haptics";
 import { cn } from "@/lib/utils";
 
-export type NavTab = "home" | "monuments" | "history" | "profile";
+export type NavTab = "home" | "monuments" | "history" | "settings";
 
 interface BottomNavProps {
   activeTab: NavTab;
@@ -13,10 +14,12 @@ const navItems: { id: NavTab; icon: typeof Home; label: string }[] = [
   { id: "home", icon: Home, label: "首頁" },
   { id: "monuments", icon: Mountain, label: "奇觀" },
   { id: "history", icon: History, label: "歷史" },
-  { id: "profile", icon: User, label: "我的" },
+  { id: "settings", icon: Settings, label: "設定" },
 ];
 
 export function BottomNav({ activeTab, onTabChange }: BottomNavProps) {
+  const [, setLocation] = useLocation();
+  
   return (
     <nav 
       className="fixed bottom-0 left-0 right-0 h-16 bg-background/80 backdrop-blur-xl border-t border-border safe-area-inset-bottom z-50"
@@ -32,7 +35,11 @@ export function BottomNav({ activeTab, onTabChange }: BottomNavProps) {
               key={item.id}
               onClick={() => {
                 hapticLight();
-                onTabChange(item.id);
+                if (item.id === "settings") {
+                  setLocation("/settings");
+                } else {
+                  onTabChange(item.id);
+                }
               }}
               className={cn(
                 "flex flex-col items-center justify-center w-16 h-full",

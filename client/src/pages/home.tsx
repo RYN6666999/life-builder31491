@@ -514,14 +514,6 @@ export default function Home() {
       );
     }
 
-    if (activeTab === "profile") {
-      return (
-        <div className="flex flex-col items-center justify-center min-h-[calc(100vh-120px)] px-4">
-          <p className="text-muted-foreground">個人資料功能即將推出</p>
-        </div>
-      );
-    }
-
     // Home tab - main flow
     switch (flowStep) {
       case "state-check":
