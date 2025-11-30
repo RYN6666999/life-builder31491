@@ -1,7 +1,7 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useLocation } from "wouter";
-import { ChevronLeft, User, Palette, Key, Cloud, Plug, Sun, Moon, Check, Upload, Download } from "lucide-react";
+import { ChevronLeft, User, Palette, Key, Cloud, Plug, Sun, Moon, Check, Upload, Download, AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -126,13 +126,26 @@ export default function Settings() {
     queryKey: ["/api/calendar/status"],
   });
 
+  // Apply theme on initial load
+  useEffect(() => {
+    if (settings?.theme) {
+      if (settings.theme === "dark") {
+        document.documentElement.classList.add("dark");
+      } else {
+        document.documentElement.classList.remove("dark");
+      }
+    }
+  }, [settings?.theme]);
+
   const handleThemeChange = (theme: string) => {
-    updateSettings.mutate({ theme });
+    // Apply immediately for instant feedback
     if (theme === "dark") {
       document.documentElement.classList.add("dark");
     } else {
       document.documentElement.classList.remove("dark");
     }
+    // Save to database
+    updateSettings.mutate({ theme });
   };
 
   if (isLoading) {
@@ -435,9 +448,16 @@ export default function Settings() {
               <CardContent className="space-y-4">
                 <div className="flex items-center justify-between p-4 rounded-lg border">
                   <div className="flex-1">
-                    <p className="font-medium">系統文件搜尋</p>
+                    <div className="flex items-center gap-2">
+                      <p className="font-medium">雲端文件搜尋</p>
+                      {cloudStatus?.connected && (
+                        <Check className="h-4 w-4 text-green-500" />
+                      )}
+                    </div>
                     <p className="text-sm text-muted-foreground">
-                      允許 AI 搜尋你的本地文件
+                      {cloudStatus?.connected
+                        ? "允許 AI 搜尋你的 Google Drive 文件"
+                        : "需要連接 Google Drive（雲端分頁）"}
                     </p>
                   </div>
                   <Switch
@@ -450,15 +470,23 @@ export default function Settings() {
                         },
                       })
                     }
+                    disabled={!cloudStatus?.connected}
                     data-testid="switch-file-search"
                   />
                 </div>
 
                 <div className="flex items-center justify-between p-4 rounded-lg border">
                   <div className="flex-1">
-                    <p className="font-medium">網路搜尋</p>
+                    <div className="flex items-center gap-2">
+                      <p className="font-medium">網路搜尋</p>
+                      {settings?.customApiKeys?.perplexity && (
+                        <Check className="h-4 w-4 text-green-500" />
+                      )}
+                    </div>
                     <p className="text-sm text-muted-foreground">
-                      允許 AI 搜尋網路獲取最新資訊
+                      {settings?.customApiKeys?.perplexity
+                        ? "允許 AI 搜尋網路獲取最新資訊"
+                        : "需要設定 Perplexity API Key（API 分頁）"}
                     </p>
                   </div>
                   <Switch
@@ -471,6 +499,7 @@ export default function Settings() {
                         },
                       })
                     }
+                    disabled={!settings?.customApiKeys?.perplexity}
                     data-testid="switch-web-search"
                   />
                 </div>
@@ -486,7 +515,7 @@ export default function Settings() {
                     <p className="text-sm text-muted-foreground">
                       {calendarStatus?.connected
                         ? "允許 AI 將任務加入行事曆"
-                        : "連接 Google Calendar 以安排任務"}
+                        : "需要連接 Google Calendar"}
                     </p>
                   </div>
                   <Switch
@@ -506,9 +535,16 @@ export default function Settings() {
 
                 <div className="flex items-center justify-between p-4 rounded-lg border">
                   <div className="flex-1">
-                    <p className="font-medium">鬧鐘提醒</p>
+                    <div className="flex items-center gap-2">
+                      <p className="font-medium">任務提醒</p>
+                      {calendarStatus?.connected && (
+                        <Check className="h-4 w-4 text-green-500" />
+                      )}
+                    </div>
                     <p className="text-sm text-muted-foreground">
-                      允許 AI 設定任務提醒
+                      {calendarStatus?.connected
+                        ? "透過 Google Calendar 發送任務提醒"
+                        : "需要連接 Google Calendar"}
                     </p>
                   </div>
                   <Switch
@@ -521,8 +557,23 @@ export default function Settings() {
                         },
                       })
                     }
+                    disabled={!calendarStatus?.connected}
                     data-testid="switch-alarms"
                   />
+                </div>
+
+                <div className="p-4 rounded-lg bg-muted/50 space-y-2">
+                  <div className="flex items-start gap-2">
+                    <AlertCircle className="h-4 w-4 text-muted-foreground mt-0.5" />
+                    <div className="text-sm text-muted-foreground">
+                      <p className="font-medium mb-1">功能需求說明：</p>
+                      <ul className="list-disc list-inside space-y-1">
+                        <li>雲端文件搜尋：需連接 Google Drive</li>
+                        <li>網路搜尋：需設定 Perplexity API Key</li>
+                        <li>行事曆與提醒：需連接 Google Calendar</li>
+                      </ul>
+                    </div>
+                  </div>
                 </div>
               </CardContent>
             </Card>
