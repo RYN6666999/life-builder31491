@@ -3,7 +3,8 @@ import { Button } from "@/components/ui/button";
 import { MONUMENTS, type MonumentConfig } from "@/lib/monuments";
 import { hapticMedium, hapticSelection } from "@/lib/haptics";
 import { cn } from "@/lib/utils";
-import { ChevronLeft } from "lucide-react";
+import { ChevronLeft, ChevronRight } from "lucide-react";
+import { useState } from "react";
 
 interface MonumentSelectionProps {
   onSelect: (monument: MonumentConfig) => void;
@@ -12,9 +13,21 @@ interface MonumentSelectionProps {
 }
 
 export function MonumentSelection({ onSelect, onBack, monumentProgress = {} }: MonumentSelectionProps) {
+  const [currentIndex, setCurrentIndex] = useState(0);
+  
   const handleSelect = (monument: MonumentConfig) => {
     hapticMedium();
     onSelect(monument);
+  };
+
+  const handleNext = () => {
+    hapticSelection();
+    setCurrentIndex((prev) => (prev + 1) % MONUMENTS.length);
+  };
+
+  const handlePrev = () => {
+    hapticSelection();
+    setCurrentIndex((prev) => (prev - 1 + MONUMENTS.length) % MONUMENTS.length);
   };
 
   const getGlowClass = (slug: string) => {
@@ -76,66 +89,108 @@ export function MonumentSelection({ onSelect, onBack, monumentProgress = {} }: M
         你想要建構哪一座人生奇觀？
       </p>
 
-      <div className="grid grid-cols-2 gap-4 flex-1">
-        {MONUMENTS.map((monument) => {
-          const Icon = monument.icon;
-          const progress = monumentProgress[monument.slug] || 0;
-          
-          return (
-            <Card
-              key={monument.id}
-              className={cn(
-                "relative aspect-square cursor-pointer transition-all duration-300",
-                "hover-elevate active-elevate-2 border border-border",
-                "bg-gradient-to-br",
-                getBgGradient(monument.slug),
-                "hover:scale-[1.02]",
-                progress > 50 && getGlowClass(monument.slug)
-              )}
-              onClick={() => handleSelect(monument)}
-              data-testid={`card-monument-${monument.slug}`}
-            >
-              <div className="flex flex-col items-center justify-center h-full p-4 text-center">
-                <div 
-                  className={cn(
-                    "w-14 h-14 rounded-full flex items-center justify-center mb-3",
-                    "bg-background/30 backdrop-blur-sm"
-                  )}
-                >
-                  <Icon className={cn("w-7 h-7", getIconColor(monument.slug))} />
-                </div>
-                <h3 className="text-lg font-semibold text-foreground mb-1">
-                  {monument.nameCn}
-                </h3>
-                <p className="text-xs text-muted-foreground line-clamp-2">
-                  {monument.description}
-                </p>
+      <div className="flex-1 flex items-center justify-center w-full px-4">
+        <div className="flex items-center gap-4 w-full max-w-md">
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={handlePrev}
+            className="flex-shrink-0"
+            data-testid="button-prev-monument"
+          >
+            <ChevronLeft className="w-6 h-6" />
+          </Button>
+
+          <div className="flex-1 overflow-hidden">
+            <div className="flex transition-transform duration-300 ease-out" style={{
+              transform: `translateX(-${currentIndex * 100}%)`,
+            }}>
+              {MONUMENTS.map((monument) => {
+                const Icon = monument.icon;
+                const progress = monumentProgress[monument.slug] || 0;
                 
-                {progress > 0 && (
-                  <div className="absolute bottom-3 left-3 right-3">
-                    <div className="h-1.5 bg-background/30 rounded-full overflow-hidden">
-                      <div 
-                        className={cn(
-                          "h-full rounded-full transition-all duration-500",
-                          monument.slug === "career" && "bg-blue-500",
-                          monument.slug === "wealth" && "bg-amber-500",
-                          monument.slug === "emotion" && "bg-purple-500",
-                          monument.slug === "family" && "bg-pink-500",
-                          monument.slug === "health" && "bg-emerald-500",
-                          monument.slug === "experience" && "bg-orange-500",
+                return (
+                  <div key={monument.id} className="w-full flex-shrink-0 px-2">
+                    <Card
+                      className={cn(
+                        "relative h-64 cursor-pointer transition-all duration-300",
+                        "hover-elevate active-elevate-2 border border-border",
+                        "bg-gradient-to-br",
+                        getBgGradient(monument.slug),
+                        getGlowClass(monument.slug)
+                      )}
+                      onClick={() => handleSelect(monument)}
+                      data-testid={`card-monument-${monument.slug}`}
+                    >
+                      <div className="flex flex-col items-center justify-center h-full p-6 text-center">
+                        <div 
+                          className={cn(
+                            "w-16 h-16 rounded-full flex items-center justify-center mb-4",
+                            "bg-background/30 backdrop-blur-sm"
+                          )}
+                        >
+                          <Icon className={cn("w-8 h-8", getIconColor(monument.slug))} />
+                        </div>
+                        <h3 className="text-xl font-semibold text-foreground mb-2">
+                          {monument.nameCn}
+                        </h3>
+                        <p className="text-sm text-muted-foreground mb-4">
+                          {monument.description}
+                        </p>
+                        
+                        {progress > 0 && (
+                          <div className="w-full">
+                            <div className="h-2 bg-background/30 rounded-full overflow-hidden mb-2">
+                              <div 
+                                className={cn(
+                                  "h-full rounded-full transition-all duration-500",
+                                  monument.slug === "career" && "bg-blue-500",
+                                  monument.slug === "wealth" && "bg-amber-500",
+                                  monument.slug === "emotion" && "bg-purple-500",
+                                  monument.slug === "family" && "bg-pink-500",
+                                  monument.slug === "health" && "bg-emerald-500",
+                                  monument.slug === "experience" && "bg-orange-500",
+                                )}
+                                style={{ width: `${Math.min(progress, 100)}%` }}
+                              />
+                            </div>
+                            <p className="text-xs text-muted-foreground">
+                              {progress} XP
+                            </p>
+                          </div>
                         )}
-                        style={{ width: `${Math.min(progress, 100)}%` }}
-                      />
-                    </div>
-                    <p className="text-xs text-muted-foreground mt-1 text-right">
-                      {progress} XP
-                    </p>
+                      </div>
+                    </Card>
                   </div>
-                )}
-              </div>
-            </Card>
-          );
-        })}
+                );
+              })}
+            </div>
+          </div>
+
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={handleNext}
+            className="flex-shrink-0"
+            data-testid="button-next-monument"
+          >
+            <ChevronRight className="w-6 h-6" />
+          </Button>
+        </div>
+      </div>
+
+      <div className="flex gap-1 justify-center mt-6">
+        {MONUMENTS.map((_, idx) => (
+          <button
+            key={idx}
+            className={cn(
+              "h-2 rounded-full transition-all",
+              idx === currentIndex ? "w-6 bg-foreground" : "w-2 bg-muted-foreground"
+            )}
+            onClick={() => setCurrentIndex(idx)}
+            data-testid={`button-dot-${idx}`}
+          />
+        ))}
       </div>
 
       <p className="text-sm text-muted-foreground mt-6 text-center" data-testid="text-formula">

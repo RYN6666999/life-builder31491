@@ -17,13 +17,16 @@ export function StateCheck({ onSelect }: StateCheckProps) {
     <div className="flex flex-col items-center justify-center min-h-[calc(100vh-120px)] px-4 py-8">
       <div className="text-center mb-12">
         <h1 
-          className="text-3xl font-semibold text-foreground mb-3"
+          className="text-4xl font-bold text-foreground mb-1"
           data-testid="text-greeting"
         >
-          主人，歡迎回來
+          歡迎回來 大師
         </h1>
-        <p className="text-muted-foreground text-lg" data-testid="text-question">
-          今天的能量流向何處？
+        <p className="text-xs text-muted-foreground mb-6" data-testid="text-subtitle-en">
+          welcome back, Master
+        </p>
+        <p className="text-xl text-foreground font-medium" data-testid="text-question">
+          今天的顯化是什麼？
         </p>
       </div>
 
