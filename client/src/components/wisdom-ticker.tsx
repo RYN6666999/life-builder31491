@@ -14,13 +14,10 @@ export function WisdomTicker() {
     // Clear any existing timer
     if (timerRef.current) clearInterval(timerRef.current);
 
-    // Set new timer
+    // Set new timer with random selection
     timerRef.current = setInterval(() => {
-      setCurrentIndex((prev) => {
-        const next = (prev + 1) % WISDOM_QUOTES.length;
-        return next;
-      });
-    }, 5000); // Change quote every 5 seconds
+      setCurrentIndex(Math.floor(Math.random() * WISDOM_QUOTES.length));
+    }, 5000); // Change quote every 5 seconds with random selection
 
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
@@ -40,7 +37,7 @@ export function WisdomTicker() {
   const handleNext = () => {
     setIsAutoPlay(false);
     if (timerRef.current) clearInterval(timerRef.current);
-    setCurrentIndex((prev) => (prev + 1) % WISDOM_QUOTES.length);
+    setCurrentIndex(Math.floor(Math.random() * WISDOM_QUOTES.length));
   };
 
   const handleResumeAutoPlay = () => {
