@@ -10,6 +10,12 @@ import {
   listBackupsFromGoogleDrive,
   downloadBackupFromGoogleDrive 
 } from "./google-drive";
+import {
+  checkGoogleCalendarConnection,
+  createCalendarEvent,
+  listUpcomingEvents,
+  deleteCalendarEvent
+} from "./google-calendar";
 
 export async function registerRoutes(
   httpServer: Server,
@@ -663,6 +669,69 @@ export async function registerRoutes(
     } catch (error) {
       console.error("Error restoring backup:", error);
       res.status(500).json({ error: "Failed to restore backup from Google Drive" });
+    }
+  });
+
+  // ============ GOOGLE CALENDAR MCP ============
+
+  // Check Google Calendar connection status
+  app.get("/api/calendar/status", async (req, res) => {
+    try {
+      const connected = await checkGoogleCalendarConnection();
+      res.json({ connected });
+    } catch (error) {
+      res.json({ connected: false });
+    }
+  });
+
+  // List upcoming calendar events
+  app.get("/api/calendar/events", async (req, res) => {
+    try {
+      const maxResults = parseInt(req.query.maxResults as string) || 10;
+      const events = await listUpcomingEvents(maxResults);
+      res.json(events);
+    } catch (error) {
+      console.error("Error listing calendar events:", error);
+      res.status(500).json({ error: "Failed to list calendar events" });
+    }
+  });
+
+  // Create a calendar event (for task scheduling)
+  app.post("/api/calendar/events", async (req, res) => {
+    try {
+      const { summary, description, startTime, endTime, reminder } = req.body;
+      
+      if (!summary || !startTime || !endTime) {
+        return res.status(400).json({ error: "Missing required fields" });
+      }
+      
+      const eventId = await createCalendarEvent({
+        summary,
+        description,
+        startTime,
+        endTime,
+        reminder,
+      });
+      
+      // Update settings to reflect calendar connection
+      await storage.createOrUpdateUserSettings({ googleCalendarConnected: 1 });
+      
+      res.json({ success: true, eventId });
+    } catch (error) {
+      console.error("Error creating calendar event:", error);
+      res.status(500).json({ error: "Failed to create calendar event" });
+    }
+  });
+
+  // Delete a calendar event
+  app.delete("/api/calendar/events/:eventId", async (req, res) => {
+    try {
+      const { eventId } = req.params;
+      await deleteCalendarEvent(eventId);
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error deleting calendar event:", error);
+      res.status(500).json({ error: "Failed to delete calendar event" });
     }
   });
 

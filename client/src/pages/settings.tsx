@@ -122,6 +122,10 @@ export default function Settings() {
     },
   });
 
+  const { data: calendarStatus } = useQuery<{ connected: boolean }>({
+    queryKey: ["/api/calendar/status"],
+  });
+
   const handleThemeChange = (theme: string) => {
     updateSettings.mutate({ theme });
     if (theme === "dark") {
@@ -473,20 +477,31 @@ export default function Settings() {
 
                 <div className="flex items-center justify-between p-4 rounded-lg border">
                   <div className="flex-1">
-                    <p className="font-medium">行事曆整合</p>
+                    <div className="flex items-center gap-2">
+                      <p className="font-medium">行事曆整合</p>
+                      {calendarStatus?.connected && (
+                        <Check className="h-4 w-4 text-green-500" />
+                      )}
+                    </div>
                     <p className="text-sm text-muted-foreground">
-                      {settings?.googleCalendarConnected
-                        ? "已連接 Google Calendar"
+                      {calendarStatus?.connected
+                        ? "允許 AI 將任務加入行事曆"
                         : "連接 Google Calendar 以安排任務"}
                     </p>
                   </div>
-                  <Button
-                    variant={settings?.googleCalendarConnected ? "outline" : "default"}
-                    size="sm"
-                    data-testid="button-connect-calendar"
-                  >
-                    {settings?.googleCalendarConnected ? "已連接" : "連接"}
-                  </Button>
+                  <Switch
+                    checked={settings?.mcpSettings?.calendar || false}
+                    onCheckedChange={(checked) =>
+                      updateSettings.mutate({
+                        mcpSettings: {
+                          ...settings?.mcpSettings,
+                          calendar: checked,
+                        },
+                      })
+                    }
+                    disabled={!calendarStatus?.connected}
+                    data-testid="switch-calendar"
+                  />
                 </div>
 
                 <div className="flex items-center justify-between p-4 rounded-lg border">
