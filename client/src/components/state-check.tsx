@@ -2,6 +2,7 @@ import { Card } from "@/components/ui/card";
 import { Heart, Zap } from "lucide-react";
 import { hapticMedium } from "@/lib/haptics";
 import { cn } from "@/lib/utils";
+import { WisdomTicker } from "./wisdom-ticker";
 
 interface StateCheckProps {
   onSelect: (type: "mood" | "task") => void;
@@ -84,9 +85,9 @@ export function StateCheck({ onSelect }: StateCheckProps) {
         </Card>
       </div>
 
-      <p className="text-sm text-muted-foreground mt-12 text-center max-w-xs" data-testid="text-philosophy">
-        「清理容器也是建設。每一份努力都在建構你的人生奇觀。」
-      </p>
+      <div className="mt-12 w-full">
+        <WisdomTicker />
+      </div>
     </div>
   );
 }

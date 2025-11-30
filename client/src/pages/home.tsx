@@ -7,7 +7,6 @@ import { TaskList } from "@/components/task-list";
 import { SedonaRelease, type SedonaMessage } from "@/components/sedona-release";
 import { BottomNav, type NavTab } from "@/components/bottom-nav";
 import { MonumentVisualization } from "@/components/monument-visualization";
-import { WisdomTicker } from "@/components/wisdom-ticker";
 import { hapticSuccess } from "@/lib/haptics";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -453,9 +452,6 @@ export default function Home() {
     <div className="min-h-screen bg-background flex flex-col pb-20">
       <div className="flex-1">
         {renderContent()}
-      </div>
-      <div className="mt-auto">
-        <WisdomTicker />
       </div>
       <BottomNav activeTab={activeTab} onTabChange={handleTabChange} />
     </div>
