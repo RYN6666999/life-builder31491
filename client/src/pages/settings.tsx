@@ -348,25 +348,9 @@ export default function Settings() {
                   </p>
                 </div>
 
-                <div className="space-y-2">
-                  <Label htmlFor="perplexity-key">Perplexity API Key</Label>
-                  <Input
-                    id="perplexity-key"
-                    data-testid="input-perplexity-key"
-                    type="password"
-                    placeholder="輸入你的 Perplexity API Key"
-                    defaultValue={settings?.customApiKeys?.perplexity || ""}
-                    onBlur={(e) =>
-                      updateSettings.mutate({
-                        customApiKeys: {
-                          ...settings?.customApiKeys,
-                          perplexity: e.target.value,
-                        },
-                      })
-                    }
-                  />
+                <div className="p-4 rounded-lg bg-muted/50">
                   <p className="text-sm text-muted-foreground">
-                    用於網路搜尋功能
+                    網路搜尋功能已內建於 Gemini API（Google Search Grounding），無需額外設定 API Key。
                   </p>
                 </div>
               </CardContent>
@@ -487,14 +471,10 @@ export default function Settings() {
                   <div className="flex-1">
                     <div className="flex items-center gap-2">
                       <p className="font-medium">網路搜尋</p>
-                      {settings?.customApiKeys?.perplexity && (
-                        <Check className="h-4 w-4 text-green-500" />
-                      )}
+                      <Check className="h-4 w-4 text-green-500" />
                     </div>
                     <p className="text-sm text-muted-foreground">
-                      {settings?.customApiKeys?.perplexity
-                        ? "允許 AI 搜尋網路獲取最新資訊"
-                        : "需要設定 Perplexity API Key（API 分頁）"}
+                      透過 Gemini Google Search 搜尋最新資訊
                     </p>
                   </div>
                   <Switch
@@ -507,7 +487,6 @@ export default function Settings() {
                         },
                       })
                     }
-                    disabled={!settings?.customApiKeys?.perplexity}
                     data-testid="switch-web-search"
                   />
                 </div>
@@ -577,7 +556,7 @@ export default function Settings() {
                       <p className="font-medium mb-1">功能需求說明：</p>
                       <ul className="list-disc list-inside space-y-1">
                         <li>雲端文件搜尋：需連接 Google Drive</li>
-                        <li>網路搜尋：需設定 Perplexity API Key</li>
+                        <li>網路搜尋：使用 Gemini Google Search（內建）</li>
                         <li>行事曆與提醒：需連接 Google Calendar</li>
                       </ul>
                     </div>
