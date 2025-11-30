@@ -62,9 +62,6 @@ export function WisdomTicker() {
           onClick={handleResumeAutoPlay}
           data-testid="text-quote"
         >
-          <p className="text-xs text-muted-foreground mb-2">
-            {currentIndex + 1} / {WISDOM_QUOTES.length}
-          </p>
           <p className="text-sm italic text-foreground/80 leading-relaxed">
             "{currentQuote.text}"
           </p>
