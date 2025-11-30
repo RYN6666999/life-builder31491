@@ -6,7 +6,7 @@ import {
   type Session, type InsertSession
 } from "@shared/schema";
 import { db } from "./db";
-import { eq, and, isNull } from "drizzle-orm";
+import { eq, and, isNull, asc, inArray } from "drizzle-orm";
 
 export interface IStorage {
   // Users
@@ -24,10 +24,17 @@ export interface IStorage {
   // Tasks
   getTasks(): Promise<Task[]>;
   getTasksByMonument(monumentId: string): Promise<Task[]>;
+  getTasksBySession(sessionId: string): Promise<Task[]>;
   getTask(id: string): Promise<Task | undefined>;
   createTask(task: InsertTask): Promise<Task>;
+  createBulkTasks(taskList: InsertTask[]): Promise<Task[]>;
+  updateTask(id: string, updates: Partial<InsertTask>): Promise<Task>;
+  deleteTask(id: string): Promise<void>;
+  deleteTasks(ids: string[]): Promise<void>;
   completeTask(id: string): Promise<Task>;
+  uncompleteTask(id: string): Promise<Task>;
   createChildTasks(parentId: string, tasks: Omit<InsertTask, 'parentId'>[]): Promise<Task[]>;
+  confirmDraftTasks(sessionId: string): Promise<Task[]>;
   
   // Sessions
   getSession(id: string): Promise<Session | undefined>;
@@ -98,7 +105,11 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getTasksByMonument(monumentId: string): Promise<Task[]> {
-    return db.select().from(tasks).where(eq(tasks.monumentId, monumentId));
+    return db.select().from(tasks).where(eq(tasks.monumentId, monumentId)).orderBy(asc(tasks.sortOrder));
+  }
+
+  async getTasksBySession(sessionId: string): Promise<Task[]> {
+    return db.select().from(tasks).where(eq(tasks.sessionId, sessionId)).orderBy(asc(tasks.sortOrder));
   }
 
   async getTask(id: string): Promise<Task | undefined> {
@@ -114,6 +125,40 @@ export class DatabaseStorage implements IStorage {
     return created;
   }
 
+  async createBulkTasks(taskList: InsertTask[]): Promise<Task[]> {
+    if (taskList.length === 0) return [];
+    const created = await db
+      .insert(tasks)
+      .values(taskList)
+      .returning();
+    return created;
+  }
+
+  async updateTask(id: string, updates: Partial<InsertTask>): Promise<Task> {
+    const [updated] = await db
+      .update(tasks)
+      .set(updates)
+      .where(eq(tasks.id, id))
+      .returning();
+    return updated;
+  }
+
+  async deleteTask(id: string): Promise<void> {
+    // Delete child tasks first (recursive)
+    const childTasks = await db.select().from(tasks).where(eq(tasks.parentId, id));
+    for (const child of childTasks) {
+      await this.deleteTask(child.id);
+    }
+    await db.delete(tasks).where(eq(tasks.id, id));
+  }
+
+  async deleteTasks(ids: string[]): Promise<void> {
+    if (ids.length === 0) return;
+    for (const id of ids) {
+      await this.deleteTask(id);
+    }
+  }
+
   async completeTask(id: string): Promise<Task> {
     const [updated] = await db
       .update(tasks)
@@ -126,10 +171,23 @@ export class DatabaseStorage implements IStorage {
     return updated;
   }
 
+  async uncompleteTask(id: string): Promise<Task> {
+    const [updated] = await db
+      .update(tasks)
+      .set({ 
+        status: "pending",
+        completedAt: null,
+      })
+      .where(eq(tasks.id, id))
+      .returning();
+    return updated;
+  }
+
   async createChildTasks(parentId: string, childTasks: Omit<InsertTask, 'parentId'>[]): Promise<Task[]> {
-    const tasksToInsert = childTasks.map((t) => ({
+    const tasksToInsert = childTasks.map((t, i) => ({
       ...t,
       parentId,
+      sortOrder: i,
     }));
     
     const created = await db
@@ -137,6 +195,15 @@ export class DatabaseStorage implements IStorage {
       .values(tasksToInsert)
       .returning();
     return created;
+  }
+
+  async confirmDraftTasks(sessionId: string): Promise<Task[]> {
+    const updated = await db
+      .update(tasks)
+      .set({ isDraft: 0 })
+      .where(and(eq(tasks.sessionId, sessionId), eq(tasks.isDraft, 1)))
+      .returning();
+    return updated;
   }
 
   // Sessions

@@ -74,6 +74,49 @@ export async function registerRoutes(
     }
   });
 
+  // Get tasks by session
+  app.get("/api/sessions/:sessionId/tasks", async (req, res) => {
+    try {
+      const tasks = await storage.getTasksBySession(req.params.sessionId);
+      res.json(tasks);
+    } catch (error) {
+      console.error("Error fetching session tasks:", error);
+      res.status(500).json({ error: "Failed to fetch tasks" });
+    }
+  });
+
+  // Update task
+  app.patch("/api/tasks/:id", async (req, res) => {
+    try {
+      const task = await storage.getTask(req.params.id);
+      if (!task) {
+        return res.status(404).json({ error: "Task not found" });
+      }
+
+      const updated = await storage.updateTask(req.params.id, req.body);
+      res.json(updated);
+    } catch (error) {
+      console.error("Error updating task:", error);
+      res.status(500).json({ error: "Failed to update task" });
+    }
+  });
+
+  // Delete task
+  app.delete("/api/tasks/:id", async (req, res) => {
+    try {
+      const task = await storage.getTask(req.params.id);
+      if (!task) {
+        return res.status(404).json({ error: "Task not found" });
+      }
+
+      await storage.deleteTask(req.params.id);
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error deleting task:", error);
+      res.status(500).json({ error: "Failed to delete task" });
+    }
+  });
+
   // Complete task
   app.patch("/api/tasks/:id/complete", async (req, res) => {
     try {
@@ -93,6 +136,44 @@ export async function registerRoutes(
     } catch (error) {
       console.error("Error completing task:", error);
       res.status(500).json({ error: "Failed to complete task" });
+    }
+  });
+
+  // Uncomplete task (toggle back to pending)
+  app.patch("/api/tasks/:id/uncomplete", async (req, res) => {
+    try {
+      const task = await storage.getTask(req.params.id);
+      if (!task) {
+        return res.status(404).json({ error: "Task not found" });
+      }
+
+      const updated = await storage.uncompleteTask(req.params.id);
+      
+      // Remove XP from monument if was completed
+      if (task.monumentId && task.status === "completed") {
+        await storage.updateMonumentXp(task.monumentId, -task.xpValue);
+      }
+
+      res.json(updated);
+    } catch (error) {
+      console.error("Error uncompleting task:", error);
+      res.status(500).json({ error: "Failed to uncomplete task" });
+    }
+  });
+
+  // Bulk create tasks
+  app.post("/api/tasks/bulk", async (req, res) => {
+    try {
+      const { tasks: taskList } = req.body;
+      if (!Array.isArray(taskList)) {
+        return res.status(400).json({ error: "tasks must be an array" });
+      }
+
+      const created = await storage.createBulkTasks(taskList);
+      res.status(201).json(created);
+    } catch (error) {
+      console.error("Error creating bulk tasks:", error);
+      res.status(500).json({ error: "Failed to create tasks" });
     }
   });
 
@@ -179,12 +260,29 @@ export async function registerRoutes(
       }
 
       // Determine chat mode based on session flow type and intent
-      let mode: ChatMode = "smart_guard";
+      let mode: ChatMode = "collaborative";
       let context: {
         monumentSlug?: string;
         currentTask?: string;
         sedonaStep?: number;
+        currentTasks?: Array<{ content: string; category: "E" | "A" | "P" | "X"; xpValue: number }>;
+        conversationHistory?: Array<{ role: string; content: string }>;
       } = {};
+
+      // Get current tasks for this session
+      const sessionTasks = await storage.getTasksBySession(sessionId);
+      if (sessionTasks.length > 0) {
+        context.currentTasks = sessionTasks.map(t => ({
+          content: t.content,
+          category: (t.category || "A") as "E" | "A" | "P" | "X",
+          xpValue: t.xpValue,
+        }));
+      }
+
+      // Include conversation history
+      if (session.messages && Array.isArray(session.messages)) {
+        context.conversationHistory = (session.messages as any[]).slice(-6);
+      }
 
       if (session.flowType === "mood") {
         mode = "sedona";
@@ -202,6 +300,8 @@ export async function registerRoutes(
         } else if (intent.isEmotional) {
           // Switch to sedona mode
           mode = "sedona";
+        } else {
+          mode = "collaborative";
         }
         
         // Get monument info
@@ -223,15 +323,127 @@ export async function registerRoutes(
         result?: unknown;
       }> = [];
 
-      // Create task if specified
+      // Handle collaborative task list from AI
+      if (response.taskList && response.taskList.length > 0) {
+        const newTasks = await storage.createBulkTasks(
+          response.taskList.map((t, i) => ({
+            content: t.content,
+            category: t.category,
+            xpValue: t.xpValue,
+            monumentId: session.selectedMonumentId || undefined,
+            sessionId: sessionId,
+            type: "action" as const,
+            status: "pending" as const,
+            sortOrder: i,
+            isDraft: 0,
+          }))
+        );
+        toolCalls.push({
+          name: "create_task_list",
+          args: { count: newTasks.length },
+          result: newTasks,
+        });
+      }
+
+      // Handle task updates from AI (add/remove/breakdown/complete)
+      if (response.taskUpdates) {
+        const updates = response.taskUpdates;
+        
+        // Add new tasks
+        if (updates.add && updates.add.length > 0) {
+          const existingCount = sessionTasks.length;
+          const addedTasks = await storage.createBulkTasks(
+            updates.add.map((t, i) => ({
+              content: t.content,
+              category: t.category,
+              xpValue: t.xpValue,
+              monumentId: session.selectedMonumentId || undefined,
+              sessionId: sessionId,
+              type: "action" as const,
+              status: "pending" as const,
+              sortOrder: existingCount + i,
+              isDraft: 0,
+            }))
+          );
+          toolCalls.push({
+            name: "add_tasks",
+            args: { count: addedTasks.length },
+            result: addedTasks,
+          });
+        }
+
+        // Remove tasks by index
+        if (updates.remove && updates.remove.length > 0) {
+          const tasksToRemove = updates.remove
+            .map(idx => sessionTasks[idx])
+            .filter(t => t);
+          for (const task of tasksToRemove) {
+            await storage.deleteTask(task.id);
+          }
+          toolCalls.push({
+            name: "remove_tasks",
+            args: { indices: updates.remove },
+            result: { removed: tasksToRemove.length },
+          });
+        }
+
+        // Breakdown a task into subtasks
+        if (updates.breakdown && updates.breakdown.newTasks.length > 0) {
+          const parentTask = sessionTasks[updates.breakdown.taskIndex];
+          if (parentTask) {
+            const childTasks = await storage.createChildTasks(
+              parentTask.id,
+              updates.breakdown.newTasks.map((ct, i) => ({
+                content: ct.content,
+                category: ct.category,
+                xpValue: ct.xpValue,
+                monumentId: session.selectedMonumentId || undefined,
+                sessionId: sessionId,
+                type: "action" as const,
+                status: "pending" as const,
+                sortOrder: i,
+                isDraft: 0,
+              }))
+            );
+            toolCalls.push({
+              name: "breakdown_task",
+              args: { parentIndex: updates.breakdown.taskIndex, count: childTasks.length },
+              result: childTasks,
+            });
+          }
+        }
+
+        // Complete tasks by index
+        if (updates.complete && updates.complete.length > 0) {
+          for (const idx of updates.complete) {
+            const task = sessionTasks[idx];
+            if (task && task.status !== "completed") {
+              await storage.completeTask(task.id);
+              if (task.monumentId) {
+                await storage.updateMonumentXp(task.monumentId, task.xpValue);
+              }
+            }
+          }
+          toolCalls.push({
+            name: "complete_tasks",
+            args: { indices: updates.complete },
+            result: { completed: updates.complete.length },
+          });
+        }
+      }
+
+      // Create task if specified (legacy support)
       if (response.taskToCreate && session.selectedMonumentId) {
         const task = await storage.createTask({
           content: response.taskToCreate.content,
           category: response.taskToCreate.category,
           xpValue: response.taskToCreate.xpValue,
           monumentId: session.selectedMonumentId,
+          sessionId: sessionId,
           type: "action",
           status: "pending",
+          sortOrder: sessionTasks.length,
+          isDraft: 0,
         });
         toolCalls.push({
           name: "create_smart_task",
@@ -240,22 +452,25 @@ export async function registerRoutes(
         });
       }
 
-      // Create child tasks if breakdown
+      // Create child tasks if breakdown (legacy support)
       if (response.childTasks && response.childTasks.length > 0) {
         // Find the last mentioned task or create new ones
-        const tasks = await storage.getTasks();
+        const tasks = await storage.getTasksBySession(sessionId);
         const recentTask = tasks[tasks.length - 1];
         
         if (recentTask) {
           const childTasks = await storage.createChildTasks(
             recentTask.id,
-            response.childTasks.map((ct) => ({
+            response.childTasks.map((ct, i) => ({
               content: ct.content,
               category: ct.category,
               xpValue: ct.xpValue,
               monumentId: session.selectedMonumentId || undefined,
+              sessionId: sessionId,
               type: "action" as const,
               status: "pending" as const,
+              sortOrder: i,
+              isDraft: 0,
             }))
           );
           toolCalls.push({
@@ -298,10 +513,16 @@ export async function registerRoutes(
       ];
       await storage.updateSession(sessionId, { messages: updatedMessages });
 
+      // Get updated task list after processing
+      const updatedTasks = await storage.getTasksBySession(sessionId);
+
       // Prepare response
       const result: any = {
         content: response.content,
         options: response.options,
+        optionsNote: response.optionsNote,
+        tasks: updatedTasks, // Include current task list
+        taskListNote: response.taskListNote,
         toolCalls: toolCalls.length > 0 ? toolCalls : undefined,
       };
 

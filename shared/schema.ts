@@ -25,16 +25,20 @@ export const tasks = pgTable("tasks", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   parentId: varchar("parent_id"),
   monumentId: varchar("monument_id").references(() => monuments.id),
+  sessionId: varchar("session_id"), // Link to session for collaborative editing
   content: text("content").notNull(),
   status: taskStatusEnum("status").notNull().default("pending"),
   type: taskTypeEnum("type").notNull().default("action"),
   category: taskCategoryEnum("category"), // E/A/P/X classification
   xpValue: integer("xp_value").notNull().default(10),
+  sortOrder: integer("sort_order").notNull().default(0), // For ordering tasks
+  isDraft: integer("is_draft").notNull().default(0), // 0 = confirmed, 1 = draft/proposed by AI
   metadata: jsonb("metadata").$type<{
     emotionTags?: string[];
     context?: string;
     agentReasoning?: string;
     sedonaStep?: number;
+    proposedBy?: "ai" | "user";
   }>(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   completedAt: timestamp("completed_at"),

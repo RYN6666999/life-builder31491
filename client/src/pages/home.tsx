@@ -2,7 +2,7 @@ import { useState, useCallback, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { StateCheck } from "@/components/state-check";
 import { MonumentSelection } from "@/components/monument-selection";
-import { ChatInterface, type Message } from "@/components/chat-interface";
+import { CollaborativeChat, type Message } from "@/components/collaborative-chat";
 import { TaskList } from "@/components/task-list";
 import { SedonaRelease, type SedonaMessage } from "@/components/sedona-release";
 import { BottomNav, type NavTab } from "@/components/bottom-nav";
@@ -215,18 +215,29 @@ export default function Home() {
   }, [createSession]);
 
   // Handle monument selection
-  const handleMonumentSelect = useCallback((monument: MonumentConfig) => {
+  const handleMonumentSelect = useCallback(async (monument: MonumentConfig) => {
     setPreviousFlow({ step: "monument-selection", monument, flowType: "task" });
     setSelectedMonument(monument);
-    setFlowStep("chat");
-    // Initialize chat
-    setMessages([{
-      id: "1",
-      role: "assistant",
-      content: `來地球玩的大師，你已選擇了「${monument.nameCn}」這個遊戲場景。\n\n現在告訴我：在這個領域，你真正想體驗和創造什麼？不需要完美的目標，你的每一個想法都是靈感的種子。讓我幫你把它轉化為可行動的冒險任務。`,
-    }]);
-    createSession.mutate({ flowType: "task", monumentId: monument.id });
-  }, [createSession]);
+    
+    // Create session first, then enter chat
+    try {
+      const session = await createSession.mutateAsync({ flowType: "task", monumentId: monument.id });
+      setSessionId(session.id);
+      setFlowStep("chat");
+      // Initialize chat
+      setMessages([{
+        id: "1",
+        role: "assistant",
+        content: `來地球玩的大師，你已選擇了「${monument.nameCn}」這個遊戲場景。\n\n現在告訴我：在這個領域，你真正想體驗和創造什麼？不需要完美的目標，你的每一個想法都是靈感的種子。讓我幫你把它轉化為可行動的冒險任務。`,
+      }]);
+    } catch (error) {
+      toast({
+        title: "無法開始對話",
+        description: "請稍後再試",
+        variant: "destructive",
+      });
+    }
+  }, [createSession, toast]);
 
   // Handle chat message
   const handleSendMessage = useCallback(async (content: string) => {
@@ -251,13 +262,16 @@ export default function Home() {
         role: "assistant",
         content: response.content,
         options: response.options,
+        optionsNote: response.optionsNote,
         toolCalls: response.toolCalls,
       };
       setMessages((prev) => [...prev, assistantMessage]);
       
-      // Refresh tasks if any were created
-      if (response.toolCalls?.some((t: { name: string }) => t.name === "create_smart_task")) {
+      // Refresh tasks if any were created or modified
+      const taskOperations = ["create_smart_task", "create_task_list", "add_tasks", "remove_tasks", "breakdown_task", "complete_tasks", "recursive_breakdown"];
+      if (response.toolCalls?.some((t: { name: string }) => taskOperations.includes(t.name))) {
         queryClient.invalidateQueries({ queryKey: ["/api/tasks"] });
+        queryClient.invalidateQueries({ queryKey: ['/api/sessions', sessionId, 'tasks'] });
       }
       
       // Handle UI mode change
@@ -525,16 +539,19 @@ export default function Home() {
         );
       
       case "chat":
-        if (!selectedMonument) return null;
+        if (!selectedMonument || !sessionId) return null;
         return (
-          <ChatInterface
+          <CollaborativeChat
             monument={selectedMonument}
+            sessionId={sessionId}
             messages={messages}
             isLoading={isLoading}
             onSendMessage={handleSendMessage}
             onSelectOption={handleSelectOption}
             onBack={handleBack}
-            onStuck={handleStuck}
+            onTasksUpdated={() => {
+              queryClient.invalidateQueries({ queryKey: ['/api/monuments'] });
+            }}
           />
         );
       
