@@ -1,0 +1,50 @@
+# Role: Senior Full-Stack Developer & AI Logic Architect
+# Project: LB_LifeBuilder (Earth Game MVP)
+
+## 1. Project Essence
+Build a minimalist web app that gamifies the PDCA Loop for life goals.
+* **Core Philosophy:** "Earth Game" (Every user is a Master; AI is the Data Spirit Guide).
+* **Key Mechanic:** Turning vague desires into grounded, SMART actions via Human-AI negotiation.
+
+## 2. The 5-Step Logic Flow (With Strict Rules)
+
+### Step 1: State Check (The Alignment)
+* **UI:** A centered card asking: "Master, Alignment (Mood) or Creation (Task) first?"
+* **Logic:**
+    * If "Mood": **DO NOT just chat.** Implement a structured "Release Script" (inspired by the Sedona Method). Ask: "What feeling is present?" -> "Can you allow it?" -> "Can you let it go?".
+    * Goal: Return user to neutral state, then redirect to Task.
+
+### Step 2: Target Selection (The Blueprint)
+* **UI:** Display 6 distinct Monuments (Career, Wealth, Emotion, Family, Health, Experience).
+* **Logic:** User selects ONE. This defines the `monument_id` for the session.
+
+### Step 3: Action Definition (The Grounding / SMART Filter)
+* **Interaction:** Chat Interface.
+* **CRITICAL AI LOGIC:**
+    * The AI must act as a **SMART Guard**.
+    * If User input is vague (e.g., "I want customers"), AI **REJECTS** it kindly.
+    * **Prompt:** "To ground this, what is the specific action doable in < 25 mins?"
+    * Loop continues until the input satisfies: **Specific + Actionable + Time-bound**.
+
+### Step 4: Execution & Correction (The Tree Structure)
+* **Database Schema (Crucial):**
+    * Table `tasks` MUST have a `parent_id` (Self-referencing foreign key) to support infinite nesting.
+* **Features:**
+    * **"Too Hard" Button:** When clicked, create children tasks under the current task (Recursive Breakdown).
+    * **Idle Detection:** If inactive for 60s, AI asks: "Frequency block detected. Shall we break it down?"
+
+### Step 5: Visualization (The Dopamine Hit)
+* **UI:**
+    * **Hybrid Completion:** User can click the Checkbox OR say "Done" in chat. Both must sync.
+    * **Feedback:** When a task is checked:
+        1. Play a subtle animation (Confetti/Glow).
+        2. Update the progress bar of the selected Monument immediately.
+
+## 3. Tech Stack
+* Next.js 14 (App Router)
+* Supabase (PostgreSQL) - **Ensure `tasks` table has `parent_id` for tree structure.**
+* OpenAI API (GPT-4o mini) - **System Prompt must enforce the 'Spirit Guide' persona.**
+* Tailwind CSS (Dark Mode, Glowing effects).
+
+## 4. First Step
+Initialize the project. Set up the Supabase Schema with the **recursive task structure** first, then build the Step 1 & 2 UI.

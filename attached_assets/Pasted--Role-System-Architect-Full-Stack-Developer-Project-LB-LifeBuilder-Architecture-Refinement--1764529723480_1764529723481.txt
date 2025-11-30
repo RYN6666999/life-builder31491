@@ -1,0 +1,34 @@
+# Role: System Architect & Full-Stack Developer
+# Project: LB_LifeBuilder (Architecture Refinement)
+
+Based on the CTO's engineering guidelines, please refine the technical implementation plan.
+
+## 1. The "Smart Hub" Architecture (Backend Logic)
+Instead of putting complex logic in the Frontend (Client), we will enforce a strict **Server-Side Logic Layer** using Next.js API Routes / Server Actions.
+* **Requirement:** Create a robust backend handler (e.g., `route.ts`) that acts as the "Central Brain".
+* **Responsibility:**
+    * Receive user input.
+    * **Intent Classification (The Switch):** Use Gemini-Flash to instantly classify: Is this "Mood", "Creation", or "Refinement"?
+    * **Prompt Routing:** Based on intent, select the correct System Prompt (Sedona Script vs. SMART Guard vs. Recursive Breaker).
+    * **Return:** Stream the response to the frontend.
+
+## 2. Solving Latency: Streaming Responses (Crucial)
+* **Tech Stack:** Use **`ai` (Vercel AI SDK)** library.
+* **Implementation:**
+    * Use `streamText` or `GoogleGenerativeAIStream` to pipe Gemini's output directly to the UI component.
+    * **UX Goal:** The user must see the text "typing out" in real-time. No loading spinners for more than 1 second.
+
+## 3. Data Structure Refinement (SQL + JSONB)
+* **Database:** Supabase (PostgreSQL).
+* **Table `tasks`:**
+    * `id` (UUID), `parent_id` (UUID) -> For the Tree Structure.
+    * `content` (Text), `status` (Enum).
+    * **`metadata` (JSONB):** Add this column to store flexible data like "Emotion Tags", "Context", or "Agent Reasoning" without changing the schema later.
+
+## 4. The "Hybrid Model" Strategy (Cost/Speed Optimization)
+* **Configuration:**
+    * For **Chat/Intent/Mood** (High speed needed): Use `gemini-1.5-flash`.
+    * For **Complex Breakdown/Logic** (High intelligence needed): Use `gemini-1.5-pro` (if API key allows) or `gemini-1.5-flash` with a more detailed Chain-of-Thought prompt.
+
+## Action Plan
+Please update the project setup to include the `ai` SDK for streaming and ensure the Supabase schema includes the `metadata` JSONB column. Proceed with **Option B (Next.js PWA)** but with this advanced backend architecture.

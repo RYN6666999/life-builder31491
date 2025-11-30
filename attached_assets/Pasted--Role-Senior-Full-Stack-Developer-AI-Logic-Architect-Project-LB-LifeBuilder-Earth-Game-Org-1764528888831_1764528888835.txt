@@ -1,0 +1,56 @@
+# Role: Senior Full-Stack Developer & AI Logic Architect
+# Project: LB_LifeBuilder (Earth Game - Organic Flow Edition)
+
+## 1. Project Essence
+Build a minimalist web app that gamifies the PDCA Loop, treating "Emotion" and "Action" as convertible energies.
+* **Core Philosophy:** "Energy Conservation." Every effort (inner or outer) builds the user's life monuments.
+* **UX Goal:** High tolerance, high support. The AI acts as an "Alchemist" transforming vague intent into gold (SMART actions).
+
+## 2. The 5-Step Logic Flow (Optimized for Human Nature)
+
+### Step 1: State Check (Energy Routing)
+* **UI:** "Master, where is your energy flowing? Alignment (Mood) or Creation (Task)?"
+* **Branch A (Mood - Inner Work):**
+    * **Action:** Guide through a 3-step Sedona Release (Identify -> Allow -> Release).
+    * **Critical Change:** Completing a release cycle counts as a "Task".
+    * **Reward:** Triggers "Solidification" animation on the **Emotion Monument**.
+    * **Philosophy:** "Clearing the vessel is also construction."
+* **Branch B (Task - Outer Work):**
+    * Proceed to Step 2.
+
+### Step 2: Target Selection (The Focus)
+* **UI:** Select 1 of 6 Monuments.
+
+### Step 3: Action Definition (The Interpretive Layer)
+* **Old Logic:** Reject vague input.
+* **New Logic (The Alchemist):**
+    * **Input:** User types vague goal (e.g., "Fix my messy work").
+    * **AI Action:** DO NOT REJECT. instead, **Interpret & Suggest**.
+    * **Prompt:** "I received your signal. To ground this, here are 3 concrete actions (<25 mins). Which one resonates?"
+        1. "Organize desktop files for 15 mins."
+        2. "List top 3 priorities for tomorrow."
+        3. "Clear physical desk surface."
+    * **Interaction:** User clicks ONE option -> Task Created in DB.
+
+### Step 4: Execution & Feedback (Dynamic Routing)
+* **Feature: The "Stuck" Button (formerly "Too Hard")**
+* **Logic:** When clicked, AI analyzes the context (or asks a quick 1-choice question):
+    * **Path A (Cognitive Load):** If task is complex -> **Recursive Breakdown** (Create sub-tasks).
+    * **Path B (Emotional Block):** If task is simple but user resists -> **Route to Step 1 (Alignment)**.
+* **Idle Detection:** If inactive > 60s, AI asks: "Is the resistance mental (Need breakdown) or emotional (Need alignment)?"
+
+### Step 5: Visualization (Layered Gratification)
+* **Visual Logic:**
+    * **Phase 1 (Immediate):** Upon click -> Subtle "Light Pulse" or "Haptic Shake" (Instant sensory acknowledgement).
+    * **Phase 2 (Finality):** Animation of the brick flying and **Locking** into the monument with a heavy sound (Deep confirmation).
+* **Data:** Both "Inner Work" (Mood) and "Outer Work" (Task) contribute XP to their respective Monuments.
+
+## 3. Database Schema (Schema Refinement)
+* Table `tasks`:
+    * `id`, `parent_id` (for tree structure).
+    * `type`: Enum ('action', 'inner_work'). **New field to track energy type.**
+    * `xp_value`: Int.
+    * `status`: Enum ('pending', 'completed').
+
+## 4. First Step
+Initialize the project. Set up the `tasks` table with the new `type` field. Build the Step 1 flow ensuring that "Inner Work" correctly adds XP to the Emotion Monument.
