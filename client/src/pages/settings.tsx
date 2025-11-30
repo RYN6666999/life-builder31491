@@ -91,6 +91,37 @@ export default function Settings() {
     },
   });
 
+  const { data: cloudStatus } = useQuery<{ connected: boolean }>({
+    queryKey: ["/api/cloud/status"],
+  });
+
+  const { data: cloudBackups } = useQuery<Array<{ id: string; name: string; createdTime: string }>>({
+    queryKey: ["/api/cloud/backups"],
+    enabled: cloudStatus?.connected === true,
+  });
+
+  const uploadToCloud = useMutation({
+    mutationFn: async () => {
+      const response = await apiRequest("POST", "/api/cloud/backup", {});
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/cloud/backups"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/settings"] });
+      toast({
+        title: "備份成功",
+        description: "資料已上傳到 Google Drive",
+      });
+    },
+    onError: () => {
+      toast({
+        title: "備份失敗",
+        description: "請確認 Google Drive 已連接",
+        variant: "destructive",
+      });
+    },
+  });
+
   const handleThemeChange = (theme: string) => {
     updateSettings.mutate({ theme });
     if (theme === "dark") {
@@ -332,19 +363,13 @@ export default function Settings() {
                     <div>
                       <p className="font-medium">Google Drive</p>
                       <p className="text-sm text-muted-foreground">
-                        {settings?.googleDriveConnected
-                          ? "已連接"
-                          : "尚未連接"}
+                        {cloudStatus?.connected ? "已連接" : "尚未連接"}
                       </p>
                     </div>
                   </div>
-                  <Button
-                    variant={settings?.googleDriveConnected ? "outline" : "default"}
-                    size="sm"
-                    data-testid="button-connect-drive"
-                  >
-                    {settings?.googleDriveConnected ? "中斷連接" : "連接"}
-                  </Button>
+                  {cloudStatus?.connected && (
+                    <Check className="h-5 w-5 text-green-500" />
+                  )}
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">
@@ -356,20 +381,42 @@ export default function Settings() {
                     data-testid="button-export"
                   >
                     <Download className="h-4 w-4" />
-                    匯出資料
+                    本地匯出
                   </Button>
                   <Button
-                    variant="outline"
                     className="flex items-center gap-2"
-                    data-testid="button-import"
+                    onClick={() => uploadToCloud.mutate()}
+                    disabled={uploadToCloud.isPending || !cloudStatus?.connected}
+                    data-testid="button-cloud-backup"
                   >
                     <Upload className="h-4 w-4" />
-                    匯入資料
+                    {uploadToCloud.isPending ? "上傳中..." : "雲端備份"}
                   </Button>
                 </div>
 
+                {cloudBackups && cloudBackups.length > 0 && (
+                  <div className="space-y-2">
+                    <Label>最近備份</Label>
+                    <div className="space-y-2">
+                      {cloudBackups.slice(0, 3).map((backup) => (
+                        <div
+                          key={backup.id}
+                          className="flex items-center justify-between p-3 rounded-lg border text-sm"
+                        >
+                          <span className="text-muted-foreground">
+                            {new Date(backup.createdTime).toLocaleDateString("zh-TW")}
+                          </span>
+                          <span className="truncate max-w-[150px]">{backup.name}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
                 <p className="text-sm text-muted-foreground text-center">
-                  定期備份可確保你的資料安全
+                  {cloudStatus?.connected
+                    ? "定期備份可確保你的資料安全"
+                    : "請先連接 Google Drive 以使用雲端備份功能"}
                 </p>
               </CardContent>
             </Card>

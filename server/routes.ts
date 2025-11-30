@@ -4,6 +4,12 @@ import { storage, initializeMonuments } from "./storage";
 import { chat, classifyIntent, type ChatMode } from "./gemini";
 import { insertTaskSchema, insertSessionSchema, insertUserSettingsSchema } from "@shared/schema";
 import { z } from "zod";
+import { 
+  checkGoogleDriveConnection, 
+  uploadBackupToGoogleDrive, 
+  listBackupsFromGoogleDrive,
+  downloadBackupFromGoogleDrive 
+} from "./google-drive";
 
 export async function registerRoutes(
   httpServer: Server,
@@ -593,6 +599,70 @@ export async function registerRoutes(
     } catch (error) {
       console.error("Error exporting data:", error);
       res.status(500).json({ error: "Failed to export data" });
+    }
+  });
+
+  // ============ GOOGLE DRIVE CLOUD SYNC ============
+
+  // Check Google Drive connection status
+  app.get("/api/cloud/status", async (req, res) => {
+    try {
+      const connected = await checkGoogleDriveConnection();
+      res.json({ connected });
+    } catch (error) {
+      res.json({ connected: false });
+    }
+  });
+
+  // Upload backup to Google Drive
+  app.post("/api/cloud/backup", async (req, res) => {
+    try {
+      const data = await storage.exportUserData();
+      const settings = await storage.getUserSettings();
+      const backupData = {
+        settings,
+        ...data,
+        exportedAt: new Date().toISOString(),
+      };
+      
+      const fileId = await uploadBackupToGoogleDrive(backupData);
+      
+      // Update settings to reflect Google Drive connection
+      await storage.createOrUpdateUserSettings({ googleDriveConnected: 1 });
+      
+      res.json({ success: true, fileId });
+    } catch (error) {
+      console.error("Error uploading backup:", error);
+      res.status(500).json({ error: "Failed to upload backup to Google Drive" });
+    }
+  });
+
+  // List backups from Google Drive
+  app.get("/api/cloud/backups", async (req, res) => {
+    try {
+      const backups = await listBackupsFromGoogleDrive();
+      res.json(backups);
+    } catch (error) {
+      console.error("Error listing backups:", error);
+      res.status(500).json({ error: "Failed to list backups from Google Drive" });
+    }
+  });
+
+  // Download and restore backup from Google Drive
+  app.post("/api/cloud/restore/:fileId", async (req, res) => {
+    try {
+      const { fileId } = req.params;
+      const backupData = await downloadBackupFromGoogleDrive(fileId);
+      
+      // For now, just return the data - actual restoration would need more logic
+      res.json({ 
+        success: true, 
+        message: "Backup data retrieved successfully",
+        data: backupData 
+      });
+    } catch (error) {
+      console.error("Error restoring backup:", error);
+      res.status(500).json({ error: "Failed to restore backup from Google Drive" });
     }
   });
 
