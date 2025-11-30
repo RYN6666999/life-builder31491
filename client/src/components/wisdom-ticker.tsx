@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { WISDOM_QUOTES } from "../../../lib/quotes";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -6,21 +6,32 @@ import { Button } from "@/components/ui/button";
 export function WisdomTicker() {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isAutoPlay, setIsAutoPlay] = useState(true);
+  const timerRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
-    if (!isAutoPlay) return;
+    if (!isAutoPlay || WISDOM_QUOTES.length === 0) return;
 
-    const interval = setInterval(() => {
-      setCurrentIndex((prev) => (prev + 1) % WISDOM_QUOTES.length);
-    }, 8000); // Change quote every 8 seconds
+    // Clear any existing timer
+    if (timerRef.current) clearInterval(timerRef.current);
 
-    return () => clearInterval(interval);
+    // Set new timer
+    timerRef.current = setInterval(() => {
+      setCurrentIndex((prev) => {
+        const next = (prev + 1) % WISDOM_QUOTES.length;
+        return next;
+      });
+    }, 5000); // Change quote every 5 seconds
+
+    return () => {
+      if (timerRef.current) clearInterval(timerRef.current);
+    };
   }, [isAutoPlay]);
 
-  const currentQuote = WISDOM_QUOTES[currentIndex];
+  const currentQuote = WISDOM_QUOTES[currentIndex] || WISDOM_QUOTES[0];
 
   const handlePrevious = () => {
     setIsAutoPlay(false);
+    if (timerRef.current) clearInterval(timerRef.current);
     setCurrentIndex(
       (prev) => (prev - 1 + WISDOM_QUOTES.length) % WISDOM_QUOTES.length
     );
@@ -28,6 +39,7 @@ export function WisdomTicker() {
 
   const handleNext = () => {
     setIsAutoPlay(false);
+    if (timerRef.current) clearInterval(timerRef.current);
     setCurrentIndex((prev) => (prev + 1) % WISDOM_QUOTES.length);
   };
 
