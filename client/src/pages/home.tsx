@@ -134,7 +134,7 @@ export default function Home() {
       setSedonaMessages([{
         id: "1",
         role: "assistant",
-        content: "主人，讓我們一起來清理內在空間。\n\n首先，請告訴我：此刻你心中有什麼感受？不需要分析或解釋，只需要描述你感受到的情緒。",
+        content: "來地球玩的大師，我看到你需要調頻。讓我們一起清理這些能量，為你的顯化騰出空間。\n\n告訴我：此刻在你心中最清晰的感受是什麼？無須分析，只需要感受和敘述。",
         step: 1,
       }]);
       createSession.mutate({ flowType: "mood" });
@@ -151,7 +151,7 @@ export default function Home() {
     setMessages([{
       id: "1",
       role: "assistant",
-      content: `主人，你選擇了「${monument.nameCn}」領域。\n\n請告訴我，你想在這個領域達成什麼目標？可以是模糊的想法，我會幫你轉化為具體可行動的任務。`,
+      content: `來地球玩的大師，你已選擇了「${monument.nameCn}」這個遊戲場景。\n\n現在告訴我：在這個領域，你真正想體驗和創造什麼？不需要完美的目標，你的每一個想法都是靈感的種子。讓我幫你把它轉化為可行動的冒險任務。`,
     }]);
     createSession.mutate({ flowType: "task", monumentId: monument.id });
   }, [createSession]);
