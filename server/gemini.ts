@@ -330,16 +330,14 @@ export async function chat(
 
     const textPrompt = `${systemPrompt}${contextInfo}${historyContext}\n\n用戶訊息：${userMessage}\n\n${images && images.length > 0 ? "用戶上傳了圖片，請分析圖片內容並結合用戶訊息回應。\n\n" : ""}請以 JSON 格式回應。`;
 
-    // Build content parts for multimodal request
-    const contentParts: Array<{ text: string } | { inlineData: { mimeType: string; data: string } }> = [];
-    
-    // Add text prompt
-    contentParts.push({ text: textPrompt });
+    // Build content for Gemini - use structured format with parts array
+    type ContentPart = { text: string } | { inlineData: { mimeType: string; data: string } };
+    const parts: ContentPart[] = [{ text: textPrompt }];
     
     // Add images if provided
     if (images && images.length > 0) {
       for (const img of images) {
-        contentParts.push({
+        parts.push({
           inlineData: {
             mimeType: img.mimeType,
             data: img.data,
@@ -348,9 +346,12 @@ export async function chat(
       }
     }
 
+    // Use proper Gemini content structure with role and parts
+    const contents = [{ role: "user" as const, parts }];
+
     const response = await ai.models.generateContent({
       model: "gemini-2.5-flash",
-      contents: contentParts,
+      contents,
       config: {
         responseMimeType: "application/json",
       },
