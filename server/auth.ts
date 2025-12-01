@@ -4,13 +4,24 @@ import { db } from "./db";
 import { googleUsers } from "@shared/schema";
 import { eq } from "drizzle-orm";
 
-// Google Fit scopes for bio-data access
+// Comprehensive Google scopes for holistic bio-data and cloud access
 const GOOGLE_FIT_SCOPES = [
+  // User identity
   "https://www.googleapis.com/auth/userinfo.profile",
   "https://www.googleapis.com/auth/userinfo.email",
+  // Fitness - Activity & Sleep
   "https://www.googleapis.com/auth/fitness.activity.read",
   "https://www.googleapis.com/auth/fitness.sleep.read",
+  // Fitness - Vital Signs
   "https://www.googleapis.com/auth/fitness.heart_rate.read",
+  "https://www.googleapis.com/auth/fitness.body_temperature.read",
+  "https://www.googleapis.com/auth/fitness.oxygen_saturation.read",
+  // Fitness - Health Metrics
+  "https://www.googleapis.com/auth/fitness.blood_glucose.read",
+  "https://www.googleapis.com/auth/fitness.blood_pressure.read",
+  "https://www.googleapis.com/auth/fitness.reproductive_health.read",
+  // Cloud Platform (for Vertex AI access)
+  "https://www.googleapis.com/auth/cloud-platform.read-only",
 ];
 
 // Check if Google OAuth is configured
