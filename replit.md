@@ -177,3 +177,66 @@ Preferred communication style: Simple, everyday language.
 - Family → park
 - Health → gym
 - Experience → museum
+
+## Development & Deployment
+
+### Local Development (Replit)
+
+```bash
+npm run dev         # Start development server
+npm run build       # Build for production
+npm run check       # TypeScript type checking
+npm run db:push     # Sync database schema
+```
+
+### Build Configuration
+
+**Single Source of Truth**: All Tailwind and PostCSS configs are in `client/` directory:
+- `client/tailwind.config.cjs` - Tailwind configuration
+- `client/postcss.config.cjs` - PostCSS configuration
+
+**Important**: Do NOT create duplicate configs in root directory. Vite is configured with `root: "client"` and will find configs there.
+
+**Validation**: Run before deployment to catch config issues:
+```bash
+node scripts/validate-tailwind-config.cjs
+```
+
+### Vercel Deployment
+
+**Configuration** (`vercel.json`):
+- `installCommand`: `npm ci --include=dev` (required for Tailwind/PostCSS)
+- `buildCommand`: `npm run build`
+- `outputDirectory`: `dist/public`
+- Node.js version: 20 (specified in `.nvmrc`)
+
+**Build Process**:
+1. `viteBuild()` compiles React app from `client/` → `dist/public/`
+2. `esbuild` bundles server code → `dist/index.cjs`
+
+**Troubleshooting Build Failures**:
+
+| Symptom | Cause | Fix |
+|---------|-------|-----|
+| "content option is missing or empty" | Tailwind config not found | Ensure `client/tailwind.config.cjs` exists |
+| Only 3 modules transformed | Wrong content paths | Check paths are relative to `client/` |
+| CSS bundle too large (>50KB) | Purging not working | Verify content paths include all TSX files |
+| "border-border class does not exist" | Empty content causing purge | Fix content paths |
+
+**Cache Issues**: If builds fail after config changes, clear Vercel build cache via dashboard.
+
+### Environment Consistency
+
+| Aspect | Replit | Vercel |
+|--------|--------|--------|
+| Database | Neon Serverless | Supabase PostgreSQL |
+| Node.js | 20.x | 20.x (via .nvmrc) |
+| devDependencies | Always installed | `--include=dev` required |
+
+### Database Driver Selection
+
+The app automatically selects the appropriate database driver:
+- Replit: Uses `@neondatabase/serverless` with WebSocket support
+- Vercel: Uses standard `pg` driver for Supabase compatibility
+
+Configured via `VERCEL` environment variable detection in `server/db.ts`.
