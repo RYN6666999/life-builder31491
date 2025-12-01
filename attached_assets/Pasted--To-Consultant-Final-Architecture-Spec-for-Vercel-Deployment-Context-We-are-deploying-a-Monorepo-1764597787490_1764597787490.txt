@@ -1,0 +1,102 @@
+📋 To Consultant: Final Architecture Spec for Vercel Deployment
+Context: We are deploying a Monorepo (Express Backend + Vite Frontend) to Vercel. The database has been migrated to Supabase (PostgreSQL). We need to refactor the codebase to ensure Vercel can correctly serve the static frontend and route API requests to the Express app via Serverless Functions.
+
+Please review and execute the following 5-Point Refactoring Plan:
+
+1. Project Structure & Routing (vercel.json)
+Create/Update vercel.json in the root to handle traffic distribution.
+
+Logic:
+
+/api/* -> Handled by the Serverless Function (api/index.ts).
+
+/* -> Handled by the Static Frontend (dist/public/index.html as SPA fallback).
+
+JSON
+
+{
+  "version": 2,
+  "rewrites": [
+    { "source": "/api/(.*)", "destination": "/api/index" },
+    { "source": "/(.*)", "destination": "/dist/public/index.html" }
+  ]
+}
+2. The Serverless Bridge (api/index.ts)
+Create a new file api/index.ts. This acts as the entry point for Vercel.
+
+Action:
+
+Modify server/index.ts (or server/app.ts) to export the app instance (e.g., export default app) instead of just calling app.listen().
+
+In api/index.ts, import that app and export it for Vercel.
+
+3. Database Connection Refactor (server/db.ts)
+We are using Supabase Transaction Pooler (Port 6543).
+
+Action:
+
+Remove @neondatabase/serverless dependencies.
+
+Install pg and @types/pg.
+
+Configure the Pool to use process.env.DATABASE_URL.
+
+TypeScript
+
+import { drizzle } from "drizzle-orm/node-postgres";
+import { Pool } from "pg";
+import * as schema from "@shared/schema";
+
+if (!process.env.DATABASE_URL) {
+  throw new Error("DATABASE_URL must be set.");
+}
+
+export const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  max: 20, // Prevent exhausting Supabase pool
+  idleTimeoutMillis: 30000,
+  connectionTimeoutMillis: 2000,
+});
+
+export const db = drizzle(pool, { schema });
+4. Build Strategy (package.json)
+We need a unified build command that Vercel can execute.
+
+Output Goal:
+
+Frontend -> dist/public
+
+Backend -> Compiled TS available for api/index.ts to import.
+
+Scripts Update:
+
+"build:client": vite build --outDir dist/public --emptyOutDir
+
+"build": npm run build:client (Vercel will handle the backend TS via its internal build step if api folder exists).
+
+5. Environment Variables Check
+Ensure the application logic relies on these standard vars:
+
+DATABASE_URL (Supabase Pooler Connection)
+
+NEXTAUTH_URL (Production URL)
+
+NEXTAUTH_SECRET
+
+GOOGLE_CLIENT_ID / SECRET
+
+GEMINI_API_KEY
+
+❓ Confirmation Question:
+Does this refactoring plan correctly address the "Express on Vercel" limitation? Is there any specific configuration for drizzle-orm needed when switching from Neon to standard Postgres?
+
+PM (G 專案) 的最後叮嚀
+這份文件發出去後，如果顧問回覆 "Looks good" 或開始執行代碼修改，那就代表我們穩了。
+
+執行完後，記得：
+
+git push 到 GitHub。
+
+去 Vercel 確保 Framework Preset 選 "Other"，Output Directory 設為 dist/public (根據上面計畫)。
+
+Redeploy。
