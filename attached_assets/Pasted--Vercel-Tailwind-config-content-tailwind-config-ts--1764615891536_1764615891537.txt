@@ -1,0 +1,78 @@
+好 — 你貼的錯誤日誌給了非常關鍵的線索。快速結論先說：Vercel 目前沒有載入到正確的 Tailwind config / content 設定（或無法讀取 tailwind.config.ts），所以 Tailwind 在 build 時產生了「content option missing or empty」的 warning，導致沒有生成 color utilities（例如 border-border），最後在 expand @apply 時失敗。
+
+下面把要檢查的重點、原因分析與可立刻採取的修復步驟列成清單（包含可直接放到 repo 的檔案範例），你可以依序檢查與套用。
+
+要先檢查的地方（優先順序）
+
+確認最新變更已 push 到 Vercel 使用的 branch
+
+在 Replit commit & git push 後，確定 Vercel 是建在相同 branch / commit（Vercel Dashboard → Deployments → 查看 build 觸發的 commit id）。
+檢查 repo 是否有 Tailwind config（有可能是 tailwind.config.ts）且 content 非空
+
+Vercel log 明確警告 content option missing or empty，表示 Tailwind 沒載入到 content paths，或 tailwind.config 根本沒被載入。
+如果你的檔案是 tailwind.config.ts，Vercel 的 build（Node）不一定會自動能解析 TypeScript config —— 這通常造成 Tailwind 無法讀到設定。
+檢查 postcss.config.js（或 .cjs）是否指向正確的 tailwind config 檔案
+
+若 postcss.config 指向 "./tailwind.config.ts"，在某些環境會失敗（Node 無法 require ts 檔）。把 config 改成 .cjs/.js 能消除這個問題。
+檢查 Vercel 在安裝時是否安裝 devDependencies
+
+如果 tailwindcss 放在 devDependencies，但Vercel 在安裝階段沒有安裝 devDependencies，build 時會缺少 tailwind/postcss，產生各種錯誤。檢查 Vercel install command 與 build logs（會顯示 npm install 的參數與是否有安裝 dev 依賴）。
+為什麼會發生（精簡技術說明）
+
+Tailwind 在 build 時會讀 tailwind.config 並根據 content 產生 utilities（包括 colors -> border-border）。若 tailwind.config 無法讀取或 content 設為空陣列，Tailwind 不會產生這些 utilities。
+tailwind.config.ts 在某些環境需要額外步驟才能被 node require；本地 dev 環境（或 Replit）可能有工具使其可用，但 Vercel 的 build 環境不一定能解析 .ts 的 config，導致「content missing」警告與未生成 utilities。
+立即可採取的修復（建議順序） A. 最快速且穩定：把 tailwind.config.ts 換成 tailwind.config.cjs（或 tailwind.config.js），並確保 content 指向 client/src 等檔案路徑。然後把 postcss.config 指向該 cjs 檔案。
+B. 確認 vercel.json / Vercel project 設定裡的 installCommand 包含 devDependencies（例如 npm ci --include=dev 或 npm install --include=dev）。
+C. 確認 client/src/index.css 在 repo 上已經是你修改後（使用原生 border-color）的版本且已推送。
+D. 本地模擬 production：在本地測試下列兩種安裝情況以重現或驗證問題：
+
+npm ci --omit=dev && npm run build (模擬沒有安裝 devDependencies 的情況)
+npm ci --include=dev && npm run build (模擬安裝 devDependencies 的情況)
+推薦的檔案範例（將 tailwind.config 改為 CJS 並修正 postcss）
+請把下面的檔案放到專案根目錄（如果你已使用 tailwind.config.ts，先改名或轉換內容），然後 commit & push。
+
+
+tailwind.config.cjs
+module.exports = {
+  content: [
+    "./client/src/**/*.{js,ts,jsx,tsx,html}",
+    "./client/index.html",
+    // 若 server 有 SSR 或 templates，可加上 server 路徑
+    "./server/**/*.{js,ts,jsx,tsx}"
+
+postcss.config.cjs
+module.exports = {
+  plugins: {
+    // nesting 應在 tailwind 前
+    "tailwindcss/nesting": {},
+    // 指向 cjs config 確保可被 Node 直接 require
+    tailwindcss: { config: "./tailwind.config.cjs" },
+（如果你偏好 .js，內容同理改成 tailwind.config.js 與 postcss.config.js。）
+
+其他細節與驗證指令
+
+檢查 repo 的 client/src/index.css 是否真的已 push（在 GitHub 或你遠端 repo 看檔案內容）：
+
+在本地： git status; git log -p client/src/index.css
+在遠端（GitHub UI）看看 client/src/index.css 第 1 行是否還是 @apply border-border（若是，表示變更沒 push / Vercel 用的是舊 commit）。
+在本地模擬 Vercel 機制（檢查是否為 devDeps 問題）：
+
+模擬「不安裝 devDependencies」： rm -rf node_modules package-lock.json npm ci --omit=dev npm run build -> 若這會失敗，就代表你需要確保 Vercel build 安裝 devDependencies（或把 tailwindcss 移入 dependencies，不建議，但可做緊急測試）
+模擬「安裝 devDependencies」： rm -rf node_modules package-lock.json npm ci --include=dev npm run build -> 若這可以成功，問題就確認為 Vercel 沒安裝 dev 依賴或安裝方式不對
+在 Vercel Dashboard 檢查 build logs：找到 install 階段（會顯示 npm ci / npm install 的輸出），確認 tailwindcss 與 postcss 是否被安裝。
+
+為何不直接用 tailwind.config.ts（如果你想保留 .ts）
+
+需要在 build 環境安裝 ts-node 或讓 Node 能夠載入 ts config，通常比較麻煩。最穩健的做法是把 config 以 cjs/js 傳到遠端 build 環境。
+短期應急（若你想先讓部署通過）
+
+將自訂的 .border-border utilities 明確寫在 client/src/index.css 的 @layer base（或更早的層）中，並確保該定義在 @apply 使用前出現。但最佳做法仍是解決 Tailwind config / content 的載入問題。
+下一步我可以幫你做的事（請選一項或多項）
+
+我幫你產生 tailwind.config.cjs + postcss.config.cjs 的 git patch，你可以直接 apply & push。
+我幫你檢查你目前的 tailwind.config.ts / postcss.config.js 內容（你把檔案內容貼上來或允許我讀 repo），然後給出精確的轉換建議。
+幫你確認 Vercel build logs 的 install 階段要看哪幾行（你把更完整的 build log paste 上來，我協助判斷是否安裝 devDependencies）。
+建議先做（最實務、最快驗證）
+
+立即把 tailwind.config.ts 轉為 tailwind.config.cjs（用我上面的範例），把 postcss.config.cjs 放到專案，commit & push，然後在 Vercel 重跑一個部署。這通常能立刻解決「content missing」與「border-border 不存在」的問題。
+要我幫你做哪一步？（回覆選項：1, 2 或 3）
