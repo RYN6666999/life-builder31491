@@ -1,8 +1,35 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, integer, timestamp, jsonb, pgEnum } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, integer, timestamp, jsonb, pgEnum, index } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 import { relations } from "drizzle-orm";
+
+// Auth Sessions table - for Replit Auth session storage
+// (IMPORTANT) This table is mandatory for Replit Auth
+export const authSessions = pgTable(
+  "auth_sessions",
+  {
+    sid: varchar("sid").primaryKey(),
+    sess: jsonb("sess").notNull(),
+    expire: timestamp("expire").notNull(),
+  },
+  (table) => [index("IDX_auth_session_expire").on(table.expire)],
+);
+
+// Replit Auth Users table
+// (IMPORTANT) This table is mandatory for Replit Auth
+export const replitUsers = pgTable("replit_users", {
+  id: varchar("id").primaryKey(),
+  email: varchar("email").unique(),
+  firstName: varchar("first_name"),
+  lastName: varchar("last_name"),
+  profileImageUrl: varchar("profile_image_url"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export type UpsertReplitUser = typeof replitUsers.$inferInsert;
+export type ReplitUser = typeof replitUsers.$inferSelect;
 
 // Enums
 export const taskStatusEnum = pgEnum("task_status", ["pending", "completed", "cancelled"]);
