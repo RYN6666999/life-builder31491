@@ -136,6 +136,30 @@ export const insertUserSchema = createInsertSchema(users).pick({
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type User = typeof users.$inferSelect;
 
+// Google OAuth Users table - for Google Fit integration
+export const googleUsers = pgTable("google_users", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  googleId: text("google_id").notNull().unique(),
+  email: text("email").notNull(),
+  displayName: text("display_name"),
+  avatarUrl: text("avatar_url"),
+  accessToken: text("access_token"),
+  refreshToken: text("refresh_token"),
+  tokenExpiry: timestamp("token_expiry"),
+  fitnessScopes: jsonb("fitness_scopes").$type<string[]>(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertGoogleUserSchema = createInsertSchema(googleUsers).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type GoogleUser = typeof googleUsers.$inferSelect;
+export type InsertGoogleUser = z.infer<typeof insertGoogleUserSchema>;
+
 // AI Persona enum
 export const aiPersonaEnum = pgEnum("ai_persona", ["spiritual", "coach", "pm", "custom"]);
 
