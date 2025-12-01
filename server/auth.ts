@@ -55,13 +55,21 @@ export function setupAuth() {
     return;
   }
 
+  // Build the full callback URL from environment
+  const domain = process.env.REPLIT_DEV_DOMAIN || process.env.REPLIT_DOMAINS?.split(",")[0];
+  const callbackURL = domain 
+    ? `https://${domain}/auth/google/callback`
+    : "/auth/google/callback";
+  
+  console.log("Google OAuth callback URL:", callbackURL);
+
   // Google OAuth2 Strategy with Fitness scopes
   passport.use(
     new GoogleStrategy(
       {
         clientID: process.env.GOOGLE_CLIENT_ID!,
         clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
-        callbackURL: "/auth/google/callback",
+        callbackURL: callbackURL,
         scope: GOOGLE_FIT_SCOPES,
       },
       async (accessToken, refreshToken, profile, done) => {
