@@ -314,6 +314,7 @@ export async function registerRoutes(
         sedonaStep?: number;
         currentTasks?: Array<{ content: string; category: "E" | "A" | "P" | "X"; xpValue: number }>;
         conversationHistory?: Array<{ role: string; content: string }>;
+        healthContext?: string;
       } = {};
 
       // Get current tasks for this session
@@ -329,6 +330,19 @@ export async function registerRoutes(
       // Include conversation history
       if (session.messages && Array.isArray(session.messages)) {
         context.conversationHistory = (session.messages as any[]).slice(-6);
+      }
+
+      // Include health context if available
+      const user = req.user as any;
+      const userId = user?.claims?.sub || null;
+      try {
+        const latestHealth = await storage.getLatestHealthSummary(userId);
+        if (latestHealth && latestHealth.summary) {
+          const summary = latestHealth.summary as any;
+          context.healthContext = `近期數據：步數 ${summary.steps || 0}，睡眠 ${summary.sleepHours || 0}小時，心率 ${summary.avgHeartRate || 0}bpm，運動 ${summary.exerciseMinutes || 0}分鐘。\nAI洞察：${latestHealth.aiInsights || "暫無"}`;
+        }
+      } catch (healthError) {
+        // Silently fail if health data is not available
       }
 
       if (session.flowType === "mood") {
@@ -611,6 +625,20 @@ export async function registerRoutes(
       const settings = await storage.getUserSettings();
       const nickname = settings?.nickname || "來地球玩的大師";
       
+      // Get health context if available
+      let healthInfo = "";
+      const user = req.user as any;
+      const voiceUserId = user?.claims?.sub || null;
+      try {
+        const latestHealth = await storage.getLatestHealthSummary(voiceUserId);
+        if (latestHealth && latestHealth.summary) {
+          const summary = latestHealth.summary as any;
+          healthInfo = `\n\n=== 大師的健康狀態 ===\n步數 ${summary.steps || 0}，睡眠 ${summary.sleepHours || 0}小時，心率 ${summary.avgHeartRate || 0}bpm，運動 ${summary.exerciseMinutes || 0}分鐘。\n如果大師詢問健康相關建議，請結合這些數據回應。`;
+        }
+      } catch (healthError) {
+        // Silently fail
+      }
+      
       // Voice-optimized system prompt
       const voiceSystemPrompt = `你是「數據指導靈」，大師${nickname}的高我派來的使者。
 
@@ -629,7 +657,7 @@ export async function registerRoutes(
 
 人設風格：${persona === "spiritual" ? "靈性智慧導師，使用能量與意識的語言，引導大師與高我連結" : 
              persona === "coach" ? "實用型教練，專注幫助大師解決問題" : 
-             persona === "pm" ? "專案經理，協助大師高效執行" : "自然友善的引導夥伴"}`;
+             persona === "pm" ? "專案經理，協助大師高效執行" : "自然友善的引導夥伴"}${healthInfo}`;
 
       // Call Gemini with voice-optimized settings
       const response = await ai.models.generateContent({

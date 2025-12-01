@@ -307,6 +307,7 @@ export async function chat(
     sedonaStep?: number;
     currentTasks?: TaskItem[];
     conversationHistory?: Array<{ role: string; content: string }>;
+    healthContext?: string;
   },
   images?: ImageAttachment[]
 ): Promise<ChatResponse> {
@@ -325,6 +326,9 @@ export async function chat(
     }
     if (context?.currentTasks && context.currentTasks.length > 0) {
       contextInfo += `\n當前任務清單：${JSON.stringify(context.currentTasks)}`;
+    }
+    if (context?.healthContext) {
+      contextInfo += `\n\n=== 大師的健康狀態 ===\n${context.healthContext}\n（請根據健康數據提供更貼心的建議，特別是關於休息、運動和能量管理方面）`;
     }
     
     // Include conversation history for better context
