@@ -3,7 +3,7 @@ const path = require("path");
 module.exports = {
   plugins: {
     "tailwindcss/nesting": {},
-    tailwindcss: { config: path.resolve(__dirname, "tailwind.config.cjs") },
+    tailwindcss: { config: path.join(__dirname, "client", "tailwind.config.cjs") },
     autoprefixer: {},
   },
 };
