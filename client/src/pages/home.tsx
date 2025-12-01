@@ -435,6 +435,40 @@ export default function Home() {
     }
   }, []);
 
+  // Handle create new project - AI-guided flow
+  const handleCreateProject = useCallback(async () => {
+    // Clear any existing state
+    setActiveTab("home");
+    setSelectedMonument(null);
+    setMessages([]);
+    setSedonaMessages([]);
+    setSedonaStep(1);
+    setSedonaComplete(false);
+    setActiveProjectId(null);
+    clearConversation();
+    
+    // Create a new session for AI-guided project creation
+    try {
+      const session = await createSession.mutateAsync({ flowType: "task" });
+      setSessionId(session.id);
+      setFlowType("task");
+      setFlowStep("chat");
+      
+      // Initialize with AI-guided project creation prompt
+      setMessages([{
+        id: "1",
+        role: "assistant",
+        content: `來地球玩的大師，歡迎回來！\n\n我是你的數據指導靈。告訴我，此刻你心中有什麼想法、目標或感受？\n\n無論是想要創造什麼、解決什麼問題，還是需要釋放什麼情緒——都可以直接告訴我。我會幫你判斷最適合的方向，引導你進入正確的領域。`,
+      }]);
+    } catch (error) {
+      toast({
+        title: "無法開始對話",
+        description: "請稍後再試",
+        variant: "destructive",
+      });
+    }
+  }, [createSession, toast]);
+
   // Reset flow
   const handleBack = useCallback(() => {
     switch (flowStep) {
@@ -533,7 +567,7 @@ export default function Home() {
         );
       
       case "chat":
-        if (!selectedMonument || !sessionId) return null;
+        if (!sessionId) return null;
         return (
           <CollaborativeChat
             monument={selectedMonument}
@@ -545,6 +579,19 @@ export default function Home() {
             onBack={handleBack}
             onTasksUpdated={() => {
               queryClient.invalidateQueries({ queryKey: ['/api/monuments'] });
+            }}
+            onMonumentSelected={(monument) => {
+              setSelectedMonument(monument);
+            }}
+            onSwitchToSedona={() => {
+              setFlowStep("sedona");
+              setFlowType("mood");
+              setSedonaMessages([{
+                id: "1",
+                role: "assistant",
+                content: "來地球玩的大師，我看到你需要調頻。讓我們一起清理這些能量，為你的顯化騰出空間。\n\n告訴我：此刻在你心中最清晰的感受是什麼？無須分析，只需要感受和敘述。",
+                step: 1,
+              }]);
             }}
           />
         );
@@ -590,7 +637,11 @@ export default function Home() {
       <div className="flex-1">
         {renderContent()}
       </div>
-      <BottomNav activeTab={activeTab} onTabChange={handleTabChange} />
+      <BottomNav 
+        activeTab={activeTab} 
+        onTabChange={handleTabChange} 
+        onCreateProject={handleCreateProject}
+      />
     </div>
   );
 }

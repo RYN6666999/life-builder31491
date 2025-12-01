@@ -222,3 +222,30 @@ export const insertUserSettingsSchema = createInsertSchema(userSettings).omit({
 
 export type UserSettings = typeof userSettings.$inferSelect;
 export type InsertUserSettings = z.infer<typeof insertUserSettingsSchema>;
+
+// Saved Locations table - for spatial memory and navigation
+export const savedLocations = pgTable("saved_locations", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id"),
+  name: text("name").notNull(),
+  address: text("address"),
+  lat: text("lat").notNull(),
+  lng: text("lng").notNull(),
+  category: text("category"),
+  metadata: jsonb("metadata").$type<{
+    placeId?: string;
+    types?: string[];
+    notes?: string;
+  }>(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertSavedLocationSchema = createInsertSchema(savedLocations).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type SavedLocation = typeof savedLocations.$inferSelect;
+export type InsertSavedLocation = z.infer<typeof insertSavedLocationSchema>;

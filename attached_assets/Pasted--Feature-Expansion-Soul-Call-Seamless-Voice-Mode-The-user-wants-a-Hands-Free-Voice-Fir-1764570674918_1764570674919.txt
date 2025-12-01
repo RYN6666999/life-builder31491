@@ -1,0 +1,35 @@
+# 🎙️ Feature Expansion: "Soul Call" (Seamless Voice Mode)
+
+The user wants a **Hands-Free, Voice-First Experience** similar to ChatGPT's Voice Mode.
+The goal is to have a fluid conversation with the "Data Spirit Guide" without typing.
+
+## 1. UI: The "Soul Orb"
+* Create a new view/component: `VoiceMode`.
+* **Visual:** A central, pulsing animated circle (Orb).
+    * **Idle:** Slow breathing pulse (Blue/Gold).
+    * **Listening:** Active vibration/ripple effect (Red/Orange).
+    * **Thinking:** Rapid spinning or color shift (Purple).
+    * **Speaking:** Pulse syncs with audio amplitude (if possible, or just active pulse).
+
+## 2. Tech Stack: Web Speech API (Zero Latency)
+* **Speech-to-Text (STT):** Use `window.SpeechRecognition` (or `webkitSpeechRecognition`).
+    * **Language:** Auto-detect or default to User's language (e.g., 'zh-TW').
+    * **Logic:** Start listening on button tap. Automatically submit when the user stops speaking for > 1.5 seconds.
+* **Text-to-Speech (TTS):** Use `window.speechSynthesis`.
+    * **Logic:** As soon as Gemini returns the text stream, start reading it aloud.
+    * **Voice:** Select a calm, deeper voice if available on the device.
+
+## 3. Interaction Flow (The Loop)
+1.  **Tap Orb:** App enters "Listening Mode".
+2.  **User Speaks:** "I feel stuck on this project."
+3.  **Auto-Submit:** App detects silence -> sends text to Gemini.
+4.  **AI Responds:**
+    * **Visual:** Text streams on screen (subtitles style).
+    * **Audio:** AI reads the response automatically.
+5.  **Auto-Listen (Optional):** After AI finishes speaking, automatically open the mic again for follow-up (create a toggle for "Continuous Conversation").
+
+## 4. Prompt Adjustment for Voice
+* When in Voice Mode, inject a system prompt: "Keep responses concise, conversational, and suitable for spoken audio. Avoid markdown symbols like * or # in the output text that is sent to TTS."
+
+## Action
+Implement the `VoiceMode` component and add a "Headphone" icon in the main nav to access it.

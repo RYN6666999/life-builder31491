@@ -1,6 +1,6 @@
-import { Home, Mountain, History, Settings } from "lucide-react";
+import { Home, Mountain, History, Settings, Plus } from "lucide-react";
 import { useLocation } from "wouter";
-import { hapticLight } from "@/lib/haptics";
+import { hapticLight, hapticSuccess } from "@/lib/haptics";
 import { cn } from "@/lib/utils";
 
 export type NavTab = "home" | "monuments" | "history" | "settings";
@@ -8,16 +8,18 @@ export type NavTab = "home" | "monuments" | "history" | "settings";
 interface BottomNavProps {
   activeTab: NavTab;
   onTabChange: (tab: NavTab) => void;
+  onCreateProject?: () => void;
 }
 
-const navItems: { id: NavTab; icon: typeof Home; label: string }[] = [
+const navItems: { id: NavTab | "create"; icon: typeof Home; label: string }[] = [
   { id: "home", icon: Home, label: "首頁" },
   { id: "monuments", icon: Mountain, label: "奇觀" },
+  { id: "create", icon: Plus, label: "建立" },
   { id: "history", icon: History, label: "歷史" },
   { id: "settings", icon: Settings, label: "設定" },
 ];
 
-export function BottomNav({ activeTab, onTabChange }: BottomNavProps) {
+export function BottomNav({ activeTab, onTabChange, onCreateProject }: BottomNavProps) {
   const [, setLocation] = useLocation();
   
   return (
@@ -28,7 +30,30 @@ export function BottomNav({ activeTab, onTabChange }: BottomNavProps) {
       <div className="flex items-center justify-around h-full max-w-lg mx-auto">
         {navItems.map((item) => {
           const Icon = item.icon;
-          const isActive = activeTab === item.id;
+          const isActive = item.id !== "create" && activeTab === item.id;
+          const isCreateButton = item.id === "create";
+
+          if (isCreateButton) {
+            return (
+              <button
+                key={item.id}
+                onClick={() => {
+                  hapticSuccess();
+                  onCreateProject?.();
+                }}
+                className="flex flex-col items-center justify-center w-16 h-full -mt-4"
+                data-testid="nav-create-project"
+              >
+                <div className="relative p-3 rounded-full bg-primary shadow-lg shadow-primary/40 transition-transform active:scale-95">
+                  <Icon className="w-6 h-6 text-primary-foreground" />
+                  <div className="absolute inset-0 rounded-full bg-white/10 animate-pulse" />
+                </div>
+                <span className="text-xs mt-1 text-primary font-medium">
+                  {item.label}
+                </span>
+              </button>
+            );
+          }
 
           return (
             <button
@@ -38,7 +63,7 @@ export function BottomNav({ activeTab, onTabChange }: BottomNavProps) {
                 if (item.id === "settings") {
                   setLocation("/settings");
                 } else {
-                  onTabChange(item.id);
+                  onTabChange(item.id as NavTab);
                 }
               }}
               className={cn(

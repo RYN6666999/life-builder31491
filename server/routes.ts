@@ -780,5 +780,157 @@ export async function registerRoutes(
     res.json({ configured });
   });
 
+  // ============ SAVED LOCATIONS (Spatial Memory) ============
+
+  // Get all saved locations
+  app.get("/api/locations", async (req, res) => {
+    try {
+      const locations = await storage.getSavedLocations();
+      res.json(locations);
+    } catch (error) {
+      console.error("Error fetching saved locations:", error);
+      res.status(500).json({ error: "Failed to fetch saved locations" });
+    }
+  });
+
+  // Get a specific saved location
+  app.get("/api/locations/:id", async (req, res) => {
+    try {
+      const location = await storage.getSavedLocation(req.params.id);
+      if (!location) {
+        return res.status(404).json({ error: "Location not found" });
+      }
+      res.json(location);
+    } catch (error) {
+      console.error("Error fetching saved location:", error);
+      res.status(500).json({ error: "Failed to fetch saved location" });
+    }
+  });
+
+  // Search saved location by name
+  app.get("/api/locations/search/:name", async (req, res) => {
+    try {
+      const location = await storage.getSavedLocationByName(req.params.name);
+      if (!location) {
+        return res.status(404).json({ error: "Location not found", found: false });
+      }
+      res.json({ ...location, found: true });
+    } catch (error) {
+      console.error("Error searching saved location:", error);
+      res.status(500).json({ error: "Failed to search saved location" });
+    }
+  });
+
+  // Create a new saved location
+  app.post("/api/locations", async (req, res) => {
+    try {
+      const { name, address, lat, lng, category, metadata } = req.body;
+      
+      if (!name || !lat || !lng) {
+        return res.status(400).json({ error: "Name, lat, and lng are required" });
+      }
+      
+      const location = await storage.createSavedLocation({
+        name,
+        address,
+        lat: String(lat),
+        lng: String(lng),
+        category,
+        metadata,
+      });
+      res.status(201).json(location);
+    } catch (error) {
+      console.error("Error creating saved location:", error);
+      res.status(500).json({ error: "Failed to create saved location" });
+    }
+  });
+
+  // Update a saved location
+  app.patch("/api/locations/:id", async (req, res) => {
+    try {
+      const location = await storage.updateSavedLocation(req.params.id, req.body);
+      res.json(location);
+    } catch (error) {
+      console.error("Error updating saved location:", error);
+      res.status(500).json({ error: "Failed to update saved location" });
+    }
+  });
+
+  // Delete a saved location
+  app.delete("/api/locations/:id", async (req, res) => {
+    try {
+      await storage.deleteSavedLocation(req.params.id);
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error deleting saved location:", error);
+      res.status(500).json({ error: "Failed to delete saved location" });
+    }
+  });
+
+  // ============ NAVIGATION (Travel Time & Maps) ============
+
+  // Calculate travel time using Google Distance Matrix API
+  app.post("/api/navigation/travel-time", async (req, res) => {
+    try {
+      const { originLat, originLng, destLat, destLng, mode = "driving" } = req.body;
+      
+      if (!originLat || !originLng || !destLat || !destLng) {
+        return res.status(400).json({ error: "Origin and destination coordinates are required" });
+      }
+      
+      const apiKey = process.env.GOOGLE_API_KEY;
+      if (!apiKey) {
+        return res.status(500).json({ error: "Google API key not configured" });
+      }
+      
+      const response = await fetch(
+        `https://maps.googleapis.com/maps/api/distancematrix/json?origins=${originLat},${originLng}&destinations=${destLat},${destLng}&mode=${mode}&key=${apiKey}`
+      );
+      
+      const data = await response.json();
+      
+      if (data.status !== "OK" || !data.rows?.[0]?.elements?.[0]) {
+        return res.status(500).json({ error: "Failed to calculate travel time" });
+      }
+      
+      const element = data.rows[0].elements[0];
+      
+      if (element.status !== "OK") {
+        return res.status(400).json({ error: `Route not found: ${element.status}` });
+      }
+      
+      res.json({
+        duration: element.duration.text,
+        durationSeconds: element.duration.value,
+        distance: element.distance.text,
+        distanceMeters: element.distance.value,
+      });
+    } catch (error) {
+      console.error("Error calculating travel time:", error);
+      res.status(500).json({ error: "Failed to calculate travel time" });
+    }
+  });
+
+  // Generate navigation deep link
+  app.post("/api/navigation/navigate", async (req, res) => {
+    try {
+      const { destLat, destLng, destName, mode = "driving" } = req.body;
+      
+      if (!destLat || !destLng) {
+        return res.status(400).json({ error: "Destination coordinates are required" });
+      }
+      
+      const mapsUrl = `https://www.google.com/maps/dir/?api=1&destination=${destLat},${destLng}&travelmode=${mode}`;
+      
+      res.json({
+        url: mapsUrl,
+        destName: destName || "目的地",
+      });
+    } catch (error) {
+      console.error("Error generating navigation link:", error);
+      res.status(500).json({ error: "Failed to generate navigation link" });
+    }
+  });
+
   return httpServer;
 }

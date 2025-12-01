@@ -1,10 +1,11 @@
 import { 
-  users, tasks, monuments, sessions, userSettings,
+  users, tasks, monuments, sessions, userSettings, savedLocations,
   type User, type InsertUser, 
   type Task, type InsertTask,
   type Monument, type InsertMonument,
   type Session, type InsertSession,
-  type UserSettings, type InsertUserSettings
+  type UserSettings, type InsertUserSettings,
+  type SavedLocation, type InsertSavedLocation
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, isNull, asc, inArray } from "drizzle-orm";
@@ -46,6 +47,14 @@ export interface IStorage {
   getUserSettings(): Promise<UserSettings | undefined>;
   createOrUpdateUserSettings(settings: Partial<InsertUserSettings>): Promise<UserSettings>;
   exportUserData(): Promise<{ sessions: Session[]; tasks: Task[]; monuments: Monument[] }>;
+  
+  // Saved Locations
+  getSavedLocations(userId?: string): Promise<SavedLocation[]>;
+  getSavedLocation(id: string): Promise<SavedLocation | undefined>;
+  getSavedLocationByName(name: string, userId?: string): Promise<SavedLocation | undefined>;
+  createSavedLocation(location: InsertSavedLocation): Promise<SavedLocation>;
+  updateSavedLocation(id: string, updates: Partial<InsertSavedLocation>): Promise<SavedLocation>;
+  deleteSavedLocation(id: string): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -265,6 +274,50 @@ export class DatabaseStorage implements IStorage {
     const allTasks = await db.select().from(tasks);
     const allMonuments = await db.select().from(monuments);
     return { sessions: allSessions, tasks: allTasks, monuments: allMonuments };
+  }
+
+  // Saved Locations
+  async getSavedLocations(userId?: string): Promise<SavedLocation[]> {
+    if (userId) {
+      return db.select().from(savedLocations).where(eq(savedLocations.userId, userId));
+    }
+    return db.select().from(savedLocations);
+  }
+
+  async getSavedLocation(id: string): Promise<SavedLocation | undefined> {
+    const [location] = await db.select().from(savedLocations).where(eq(savedLocations.id, id));
+    return location || undefined;
+  }
+
+  async getSavedLocationByName(name: string, userId?: string): Promise<SavedLocation | undefined> {
+    const lowerName = name.toLowerCase();
+    const all = userId 
+      ? await db.select().from(savedLocations).where(eq(savedLocations.userId, userId))
+      : await db.select().from(savedLocations);
+    
+    const found = all.find(l => l.name.toLowerCase() === lowerName);
+    return found;
+  }
+
+  async createSavedLocation(location: InsertSavedLocation): Promise<SavedLocation> {
+    const [created] = await db
+      .insert(savedLocations)
+      .values(location)
+      .returning();
+    return created;
+  }
+
+  async updateSavedLocation(id: string, updates: Partial<InsertSavedLocation>): Promise<SavedLocation> {
+    const [updated] = await db
+      .update(savedLocations)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(eq(savedLocations.id, id))
+      .returning();
+    return updated;
+  }
+
+  async deleteSavedLocation(id: string): Promise<void> {
+    await db.delete(savedLocations).where(eq(savedLocations.id, id));
   }
 }
 

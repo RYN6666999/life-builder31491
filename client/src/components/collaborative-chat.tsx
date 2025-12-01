@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -21,7 +21,10 @@ import {
   ListTodo,
   ImagePlus,
   X,
-  MapPin
+  MapPin,
+  Mic,
+  MicOff,
+  Volume2
 } from "lucide-react";
 import { hapticLight, hapticMedium, hapticSuccess } from "@/lib/haptics";
 import { cn } from "@/lib/utils";
@@ -29,6 +32,7 @@ import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { MonumentConfig } from "@/lib/monuments";
 import type { Task } from "@shared/schema";
 import { usePlacesSearch, type PlaceResult } from "@/hooks/use-places";
+import { useVoice } from "@/hooks/use-voice";
 import { PlacesCard, PlacesLoadingCard } from "@/components/places-card";
 
 export interface ImageAttachment {
@@ -52,7 +56,7 @@ export interface Message {
 }
 
 interface CollaborativeChatProps {
-  monument: MonumentConfig;
+  monument?: MonumentConfig | null;
   sessionId: string;
   messages: Message[];
   isLoading: boolean;
@@ -60,6 +64,8 @@ interface CollaborativeChatProps {
   onSelectOption: (option: string) => void;
   onBack: () => void;
   onTasksUpdated?: () => void;
+  onMonumentSelected?: (monument: MonumentConfig) => void;
+  onSwitchToSedona?: () => void;
 }
 
 function TypingIndicator() {
@@ -331,6 +337,8 @@ export function CollaborativeChat({
   onSelectOption,
   onBack,
   onTasksUpdated,
+  onMonumentSelected,
+  onSwitchToSedona,
 }: CollaborativeChatProps) {
   const [input, setInput] = useState("");
   const [isTaskListOpen, setIsTaskListOpen] = useState(true);
@@ -342,6 +350,22 @@ export function CollaborativeChat({
   
   // Places search hook
   const { searchNearby, loading: placesLoading } = usePlacesSearch();
+  
+  // Voice interface hook
+  const { 
+    isListening, 
+    finalTranscript, 
+    isSupported: voiceSupported,
+    isSpeaking,
+    startListening,
+    stopListening,
+    speak,
+    stopSpeaking,
+    clearTranscript,
+  } = useVoice({ lang: "zh-TW" });
+  
+  // Track if user is manually editing
+  const [isManualInput, setIsManualInput] = useState(false);
 
   // Fetch tasks for this session
   const { data: tasks = [], refetch: refetchTasks } = useQuery<Task[]>({
@@ -409,6 +433,32 @@ export function CollaborativeChat({
     refetchTasks();
   }, [messages, refetchTasks]);
 
+  // Track previous listening state for detecting when listening ends
+  const wasListeningRef = useRef(false);
+  
+  // When listening ends, copy finalTranscript to input for review/editing
+  // Skip if user has manually typed (isManualInput flag)
+  useEffect(() => {
+    if (wasListeningRef.current && !isListening && finalTranscript?.trim() && !isManualInput) {
+      setInput(finalTranscript.trim());
+      clearTranscript();
+    }
+    wasListeningRef.current = isListening;
+  }, [isListening, finalTranscript, clearTranscript, isManualInput]);
+
+  // Voice toggle handler
+  const handleVoiceToggle = useCallback(() => {
+    if (isListening) {
+      stopListening();
+      hapticLight();
+    } else {
+      setIsManualInput(false);
+      clearTranscript();
+      startListening();
+      hapticMedium();
+    }
+  }, [isListening, startListening, stopListening, clearTranscript]);
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if ((input.trim() || pendingImages.length > 0) && !isLoading) {
@@ -416,6 +466,7 @@ export function CollaborativeChat({
       onSendMessage(input.trim() || "請分析這張圖片", pendingImages.length > 0 ? pendingImages : undefined);
       setInput("");
       setPendingImages([]);
+      setIsManualInput(false);
     }
   };
 
@@ -429,7 +480,7 @@ export function CollaborativeChat({
         health: "gym",
         experience: "museum",
       };
-      const keyword = defaultKeywords[monument.slug] || "cafe";
+      const keyword = monument ? (defaultKeywords[monument.slug] || "cafe") : "cafe";
       hapticLight();
       try {
         const results = await searchNearby(keyword, { radius: 2000, maxResults: 5 });
@@ -506,7 +557,7 @@ export function CollaborativeChat({
     return colorMap[slug] || "";
   };
 
-  const Icon = monument.icon;
+  const Icon = monument?.icon;
   const rootTasks = tasks.filter((t) => !t.parentId);
   const completedCount = tasks.filter((t) => t.status === "completed").length;
   const totalXp = tasks
@@ -530,8 +581,14 @@ export function CollaborativeChat({
             <ChevronLeft className="w-5 h-5" />
           </Button>
           <div className="flex items-center gap-2">
-            <Icon className={cn("w-5 h-5", getIconColor(monument.slug))} />
-            <span className="font-medium">{monument.nameCn}</span>
+            {Icon ? (
+              <Icon className={cn("w-5 h-5", getIconColor(monument?.slug || ""))} />
+            ) : (
+              <Zap className="w-5 h-5 text-primary" />
+            )}
+            <span className="font-medium">
+              {monument?.nameCn || "AI 引導對話"}
+            </span>
           </div>
         </div>
         {tasks.length > 0 && (
@@ -682,11 +739,46 @@ export function CollaborativeChat({
           >
             <MapPin className="w-5 h-5" />
           </Button>
+          {voiceSupported && (
+            <Button
+              type="button"
+              size="icon"
+              variant={isListening ? "default" : "outline"}
+              onClick={handleVoiceToggle}
+              disabled={isLoading}
+              title={isListening ? "停止語音輸入" : "開始語音輸入"}
+              className={cn(
+                isListening && "bg-red-500 hover:bg-red-600 animate-pulse"
+              )}
+              data-testid="button-voice"
+            >
+              {isListening ? (
+                <MicOff className="w-5 h-5" />
+              ) : (
+                <Mic className="w-5 h-5" />
+              )}
+            </Button>
+          )}
+          {isSpeaking && (
+            <Button
+              type="button"
+              size="icon"
+              variant="ghost"
+              onClick={stopSpeaking}
+              title="停止語音播放"
+              data-testid="button-stop-speaking"
+            >
+              <Volume2 className="w-5 h-5 animate-pulse text-primary" />
+            </Button>
+          )}
           <Input
             ref={inputRef}
             value={input}
-            onChange={(e) => setInput(e.target.value)}
-            placeholder={pendingImages.length > 0 ? "描述圖片或直接發送..." : "輸入目標或調整任務..."}
+            onChange={(e) => {
+              setInput(e.target.value);
+              setIsManualInput(true);
+            }}
+            placeholder={isListening ? "正在聆聽..." : (pendingImages.length > 0 ? "描述圖片或直接發送..." : "輸入目標或調整任務...")}
             className="flex-1 bg-card border-border"
             disabled={isLoading}
             data-testid="input-message"
