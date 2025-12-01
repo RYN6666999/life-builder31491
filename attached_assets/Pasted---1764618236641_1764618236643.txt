@@ -1,0 +1,90 @@
+很棒 — 你已經把大部分重大風險處理掉，現在我補上一份「額外容易被忽略但值得檢查與監控」清單，分成「立即檢查」、「部署前/部署後應做的自動化驗證」與「長期維運/安全/性能」三大類。每項都附上為何要注意、可能出現的症狀，以及簡單的緊急或長期處理建議與可執行指令（你可以逐一在 Replit 或本地執行驗證）。
+
+立即檢查（現在就能執行，優先級高）
+
+環境變數（build 與 runtime 分層）
+
+為何：Vercel 有 build-time 與 runtime env，若把 DB URL / API keys 放到 runtime 而 build 需要它，或相反會出錯。
+檢查項：Vercel Dashboard → Environment Variables，確認 build 時與 runtime 時所需變數都已正確設置（並且 scope 正確）。
+指令檢查（本地模擬）： node -e "console.log(process.env.MY_VAR || 'unset')"
+outputDirectory 與 Vercel 設定一致性
+
+為何：vercel.json 的 outputDirectory 要跟實際 build 輸出一致，否則部署會找不到靜態檔案。
+檢查： ls -la client/dist/public || ls -la dist/public
+若不同：調整 vercel.json 或 build config。
+檔名大小寫一致（Linux case-sensitive）
+
+為何：macOS 不敏感但 Linux（Vercel）敏感，會導致 unresolved import。
+檢查： cd client && rg -n "from "@/components" || true cd client && find src -type f | sed 's!.*/!!' | sort -u
+package manager 與 lockfile 一致性（npm / pnpm / yarn）
+
+為何：不同 package manager 解析依賴差異或工作區 (workspace) 行為會導致 CI 與本地差異。
+檢查：確認 repo 有 package-lock.json 或 pnpm-lock.yaml，Vercel 使用同一套。
+指令：cat package-lock.json | head -n 3
+部署前 / 部署後的自動驗證（CI / Preview）
+
+在 PR/CI 加入 verify:build（你已加入），並擴充為：
+build 並 grep 確認沒有 Tailwind content 警告
+build 並 grep 確認沒有 unresolved import 或 Rollup 警告
+簡單 smoke test：對 preview site 呼叫幾個 API 與首頁，確保 200 OK
+示例命令（CI job）： cd client && npm ci --include=dev && npm run build 2>&1 | tee build.log cat build.log | rg -i "The content option in your Tailwind|failed to resolve import|error during build" && exit 1 || true
+自動化 smoke test（簡單 curl）： curl -sSf https://$VERCEL_PREVIEW_URL/ || exit 1 curl -sSf https://$VERCEL_PREVIEW_URL/api/health || echo "no health endpoint"
+長期維運 / 安全 / 性能（中長期要落實）
+
+DB 連線在 Serverless 下的 pooling 與重連策略
+
+為何：Serverless / Serverless-less DB（Neon / Postgres Serverless）對連線模型敏感，連線洩漏會導致冷啟動/封鎖。
+建議：使用池化/驅動推薦的 serverless adapter（或在長存駐 process 中共享連線），把 retry/backoff 實作好。
+Build artifacts 與 cache 策略
+
+為何：Vercel 的快取有時會造成舊 node_modules 或舊 build 設定被使用。
+建議：在重大 config 改動後使用 Clear cache redeploy；CI/Deploy 日誌保留至少 7 天。
+監控、錯誤收集與告警
+
+為何：部署後發生樣式缺失或 API error 需即時察覺。
+建議：加入 Sentry / Datadog / Logflare 等（至少把 5xx 與 build 失敗設為告警），並觀察前端資產大小與首次渲染錯誤。
+依賴安全性（npm audit / SCA）
+
+為何：build log 會 show Run npm audit，部分高風險套件可能需要升級或替換。
+建議：定期 npm audit 並在 CI 中對重大漏洞建立阻斷策略。
+指令：npm audit --audit-level=moderate
+Tailwind 的動態 class 與 safelist
+
+為何：如果有大量 runtime 組 class（例如 theme color switches），Tailwind purge 可能把它們去掉。
+建議：在 tailwind.config.cjs 裡 safelist 或以正規表達式捕捉。
+圖片與字體加載策略
+
+為何：外部字體或大圖可能造成首次渲染慢或影響 Lighthouse 分數。
+建議：使用 preconnect / font-display:swap，並壓縮圖片（webp/AVIF），考慮 Vercel Image Optimization。
+CSP、CORS、安全標頭
+
+為何：若有 3rd-party scripts 或 API 請求，缺失或錯誤的 CSP/CORS 會造成 runtime 錯誤或安全隱患。
+建議：在 vercel.json 或 server middleware 中設定必要的安全標頭。
+Source maps 與 Release 記錄
+
+為何：生產錯誤追蹤需 source maps 才好 debug，但公開 source maps 可能暴露代碼。
+建議：上傳 source maps 到 Sentry 並在 CDN 上限制對 source map 存取。
+回滾、緊急回應與文件（必備）
+
+回滾策略（快且安全）
+使用 Vercel 的 rollback to previous deployment（首選）。
+若需 repo 回滾：git revert <commit> 並立刻 push，避免 force push。
+緊急檢查清單（若部署出問題）
+Redeploy previous deployment（Vercel）
+檢查 build logs 的 install 階段（是否安裝 devDeps）與 vite build 輸出（模組數量）
+檢查 env vars、.nvmrc / Node 版本、project root 設定
+文件化：在 README 寫明部署步驟、必須的 env 變數、如何清快取、如何做快速回滾
+簡短命令集合（可 copy-paste）
+
+本地模擬 production build： node ./scripts/validate-tailwind-config.js cd client rm -rf node_modules package-lock.json npm ci --include=dev npm run build 2>&1 | tee ../build_local.log rg -n "The content option in your Tailwind|failed to resolve import|error during build" ../build_local.log || echo "no relevant warnings"
+快速 smoke test（Preview URL 可用時）： curl -sSf "https://
+Unable to render expression.
+PREVIEW_URL/" && curl -sSf "https://PREVIEW_URL/api/health" || echo "smoke test failed"
+文件與流程（建議加到 repo）
+
+README/deploy.md：把 Vercel 設定、Node 版本、Project Root、installCommand、buildCommand、env vars 列清楚
+PR template：要求 run npm run verify:build（或 CI 必須通過）
+Contributing.md：寫明 config 檔放置位置與修改流程
+結語（精簡）
+
+你已經處理掉了核心痛點（Tailwind config、alias、Node 版本、db init）。為了避免未來回歸，建議把上述「立即檢查」與「部署前自動驗證」自動化納入 CI，把 config 單一化並文件化，並把回滾與監控流程設定好。這能把「越改越離奇」風險降到最低，同時保留快速迭代能力。
