@@ -1,5 +1,6 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
+import passport from "passport";
 import { storage, initializeMonuments } from "./storage";
 import { chat, classifyIntent, type ChatMode } from "./gemini";
 import { insertTaskSchema, insertSessionSchema, insertUserSettingsSchema } from "@shared/schema";
@@ -16,6 +17,7 @@ import {
   listUpcomingEvents,
   deleteCalendarEvent
 } from "./google-calendar";
+import { isGoogleAuthConfigured, GOOGLE_FIT_SCOPES } from "./auth";
 
 export async function registerRoutes(
   httpServer: Server,
@@ -23,6 +25,65 @@ export async function registerRoutes(
 ): Promise<Server> {
   // Initialize monuments on startup
   await initializeMonuments();
+
+  // ============ GOOGLE AUTHENTICATION ============
+  
+  // Check if Google Auth is configured
+  app.get("/api/auth/status", (req, res) => {
+    res.json({
+      configured: isGoogleAuthConfigured(),
+      authenticated: req.isAuthenticated(),
+      user: req.user || null,
+    });
+  });
+
+  // Get current user
+  app.get("/api/auth/me", (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.status(401).json({ error: "Not authenticated" });
+    }
+    res.json(req.user);
+  });
+
+  // Start Google OAuth flow
+  app.get("/auth/google", (req, res, next) => {
+    if (!isGoogleAuthConfigured()) {
+      return res.status(503).json({ error: "Google OAuth not configured" });
+    }
+    passport.authenticate("google", {
+      scope: GOOGLE_FIT_SCOPES,
+      accessType: "offline",
+      prompt: "consent", // Force consent to get refresh token
+    })(req, res, next);
+  });
+
+  // Google OAuth callback
+  app.get(
+    "/auth/google/callback",
+    (req, res, next) => {
+      if (!isGoogleAuthConfigured()) {
+        return res.redirect("/?error=oauth_not_configured");
+      }
+      next();
+    },
+    passport.authenticate("google", {
+      failureRedirect: "/?error=auth_failed",
+    }),
+    (req, res) => {
+      // Successful authentication
+      res.redirect("/?auth=success");
+    }
+  );
+
+  // Logout
+  app.post("/auth/logout", (req, res) => {
+    req.logout((err) => {
+      if (err) {
+        return res.status(500).json({ error: "Logout failed" });
+      }
+      res.json({ success: true });
+    });
+  });
 
   // ============ MONUMENTS ============
   

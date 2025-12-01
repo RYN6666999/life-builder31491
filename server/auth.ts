@@ -13,6 +13,11 @@ const GOOGLE_FIT_SCOPES = [
   "https://www.googleapis.com/auth/fitness.heart_rate.read",
 ];
 
+// Check if Google OAuth is configured
+export function isGoogleAuthConfigured(): boolean {
+  return !!(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET);
+}
+
 export function setupAuth() {
   // Serialize user for session
   passport.serializeUser((user: any, done) => {
@@ -33,12 +38,18 @@ export function setupAuth() {
     }
   });
 
+  // Only set up Google Strategy if credentials are available
+  if (!isGoogleAuthConfigured()) {
+    console.log("Google OAuth not configured - GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET required");
+    return;
+  }
+
   // Google OAuth2 Strategy with Fitness scopes
   passport.use(
     new GoogleStrategy(
       {
-        clientID: process.env.GOOGLE_CLIENT_ID || "",
-        clientSecret: process.env.GOOGLE_CLIENT_SECRET || "",
+        clientID: process.env.GOOGLE_CLIENT_ID!,
+        clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
         callbackURL: "/auth/google/callback",
         scope: GOOGLE_FIT_SCOPES,
       },
