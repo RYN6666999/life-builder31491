@@ -1,0 +1,44 @@
+所以我現在可以直接redeploy了嗎？
+Copilot said: 可以，現在可以 redeploy — 不過為了把失敗風險降到最低，請按下面這個「安全 redeploy 清單」一步步執行並觀察 log。若一切正常你會在
+可以，現在可以 redeploy — 不過為了把失敗風險降到最低，請按下面這個「安全 redeploy 清單」一步步執行並觀察 log。若一切正常你會在 build log 看到和本地一致的輸出（≈2576 modules transformed、CSS ~12KB、沒有 Tailwind content 警告）；若失敗，請把錯誤段貼給我我會立刻協助。
+
+在 redeploy 前（本地最後檢查，強烈建議）
+
+確認最新變更已 push git status git rev-parse HEAD git push
+
+在本地模擬一次（可跳過但建議） node ./scripts/validate-tailwind-config.js # 若有 cd client rm -rf node_modules package-lock.json npm ci --include=dev npm run build 2>&1 | tee ../local_build.log 確認 local_build.log 中沒有 "The content option ..." 與沒有 @apply border-border 錯誤，並確認 modules transform 數與 CSS 大小 (~12KB)。
+
+在 Vercel 上 Redeploy（建議用 Clear Cache）
+
+到 Vercel Dashboard → Project → Deployments
+找你要重新部署的 commit（通常是最新）→ 點右側「...」→ Redeploy
+勾選 "Clear cache"（清除快取）→ 開始 redeploy
+部署中要觀察的重點（即時檢查 build logs）
+
+Install 階段：確定有安裝 tailwindcss / postcss / autoprefixer（會顯示 npm install 的輸出）
+Debug 腳本輸出（若你把 debug 加到 buildCommand）：會顯示 cwd、client/tailwind.config.cjs 是否存在、tailwind config content、tailwind 版本、tailwind CLI 嘗試輸出
+Vite build 階段：
+期待：✓ 2576 modules transformed.
+不要看到：警告 "The content option ..." 或錯誤 "The border-border class does not exist."
+若只看到 3–4 modules transformed → 代表 Tailwind/config 沒被載入或 Project Root 錯誤
+如果 redeploy 成功（步驟）
+
+確認 build log 無錯誤
+瀏覽 Preview/Production 網站，檢查首頁與幾個重點頁面樣式正常
+檢查 CSS bundle 大小在產出檔案中（dist/public/*.css ≈ 12KB）
+如果 redeploy 失敗，請立刻把下面這些資訊貼給我
+
+build log 中從 start build 到出錯的完整區段（尤其 debug 腳本輸出與 vite build 那段）
+Vercel 上顯示的 Commit SHA（確認與 git rev-parse HEAD 一致）
+你在 vercel.json 或 Vercel UI 裡的 Build Command 與 Install Command（截圖或貼文字）
+後續清理（若 debug 腳本暫時加入 buildCommand）
+
+成功後把 vercel.json 的 buildCommand 改回正常（例如 "cd client && npm run build"），並移除 debug 腳本或把它放到非 production branch
+刪除 repo 中不必要的 duplicate config（保留 single source，建議 client/）
+快速回滾方法（若生產有重大問題）
+
+在 Vercel Dashboard 選擇上一個成功的 deployment → Redeploy（最快）
+或在 GitHub revert commit 並重新部署（較慢）
+結論
+
+可以現在 redeploy，但請先 push、在本地做最後模擬（建議），在 Vercel 選擇 Redeploy with Clear Cache，並密切觀察 build logs（特別是 Tailwind content 警告與 modules transformed 數量）。若出現錯誤，把 build log 貼上來，我幫你逐行分析與修正。
