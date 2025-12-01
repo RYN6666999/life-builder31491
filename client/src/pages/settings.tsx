@@ -135,14 +135,15 @@ export default function Settings() {
     queryKey: ["/api/calendar/status"],
   });
 
-  // Google Fit auth status
+  // Auth status from Replit Auth
   interface AuthStatus {
     configured: boolean;
     authenticated: boolean;
     user: {
       id: string;
-      googleId: string;
-      email: string;
+      email: string | null;
+      firstName: string | null;
+      lastName: string | null;
       displayName: string | null;
       avatarUrl: string | null;
     } | null;
@@ -152,19 +153,9 @@ export default function Settings() {
     queryKey: ["/api/auth/status"],
   });
 
-  const logout = useMutation({
-    mutationFn: async () => {
-      const response = await apiRequest("POST", "/auth/logout", {});
-      return response.json();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/auth/status"] });
-      toast({
-        title: "已登出",
-        description: "你已成功登出 Google 帳戶",
-      });
-    },
-  });
+  const handleLogout = () => {
+    window.location.href = "/api/logout";
+  };
 
   // Handle auth success from URL params
   useEffect(() => {
@@ -173,13 +164,13 @@ export default function Settings() {
       refetchAuth();
       toast({
         title: "登入成功",
-        description: "已連接 Google 帳戶，可以同步生物數據了！",
+        description: "歡迎回來！你的帳戶已連接。",
       });
       window.history.replaceState({}, "", "/settings");
     } else if (params.get("error")) {
       toast({
         title: "登入失敗",
-        description: "無法連接 Google 帳戶，請稍後再試",
+        description: "無法登入，請稍後再試",
         variant: "destructive",
       });
       window.history.replaceState({}, "", "/settings");
@@ -446,7 +437,7 @@ export default function Settings() {
                         )}
                         <div>
                           <p className="font-medium">{authStatus.user.displayName || authStatus.user.email}</p>
-                          <p className="text-sm text-muted-foreground">已連接 Google Fit</p>
+                          <p className="text-sm text-muted-foreground">已登入</p>
                         </div>
                       </div>
                       <Check className="h-5 w-5 text-green-500" />
@@ -463,8 +454,7 @@ export default function Settings() {
                       <Button
                         variant="outline"
                         size="icon"
-                        onClick={() => logout.mutate()}
-                        disabled={logout.isPending}
+                        onClick={handleLogout}
                         data-testid="button-logout"
                       >
                         <LogOut className="h-4 w-4" />
@@ -474,11 +464,11 @@ export default function Settings() {
                 ) : (
                   <Button
                     className="w-full flex items-center gap-2"
-                    onClick={() => window.location.href = "/auth/google"}
+                    onClick={() => window.location.href = "/api/login"}
                     data-testid="button-google-signin"
                   >
                     <SiGoogle className="h-4 w-4" />
-                    使用 Google 登入
+                    登入帳戶
                   </Button>
                 )}
               </CardContent>
