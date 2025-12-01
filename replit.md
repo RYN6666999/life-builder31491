@@ -126,3 +126,26 @@ Preferred communication style: Simple, everyday language.
 - Standalone display mode for app-like experience
 - Theme color #030712 (dark gray)
 - Supports safe area insets for modern iOS devices
+
+### Authentication
+
+**Replit Auth (OpenID Connect)**:
+- Uses Replit's built-in authentication via OpenID Connect
+- Supports multiple login methods (Google, GitHub, Apple, email/password)
+- Session management via PostgreSQL (`auth_sessions` table) using connect-pg-simple
+- Key files:
+  - `server/replitAuth.ts`: Handles OIDC setup, session management, and user upsert
+  - `shared/schema.ts`: Contains `replitUsers` and `authSessions` tables
+
+**Auth Endpoints**:
+- `GET /api/login`: Initiates OAuth flow
+- `GET /api/callback`: OAuth callback handler
+- `GET /api/logout`: Ends session and redirects to OIDC logout
+- `GET /api/auth/status`: Returns current auth state
+- `GET /api/auth/user`: Returns authenticated user details (protected)
+
+**Security Features**:
+- Secure cookies in production (HTTPS)
+- SameSite=lax for CSRF protection
+- Token refresh for expired access tokens
+- Sessions stored in PostgreSQL with TTL
