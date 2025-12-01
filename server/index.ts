@@ -1,7 +1,18 @@
 import express, { type Request, Response, NextFunction } from "express";
+import session from "express-session";
+import passport from "passport";
 import { registerRoutes } from "./routes";
 import { serveStatic } from "./static";
 import { createServer } from "http";
+import { setupAuth } from "./auth";
+import type { GoogleUser } from "@shared/schema";
+
+// Extend Express types for session user
+declare global {
+  namespace Express {
+    interface User extends GoogleUser {}
+  }
+}
 
 const app = express();
 const httpServer = createServer(app);
@@ -14,13 +25,32 @@ declare module "http" {
 
 app.use(
   express.json({
+    limit: "50mb", // Support large image uploads
     verify: (req, _res, buf) => {
       req.rawBody = buf;
     },
   }),
 );
 
-app.use(express.urlencoded({ extended: false }));
+app.use(express.urlencoded({ extended: false, limit: "50mb" }));
+
+// Session middleware
+app.use(
+  session({
+    secret: process.env.SESSION_SECRET || "lifebuilder-session-secret",
+    resave: false,
+    saveUninitialized: false,
+    cookie: {
+      secure: process.env.NODE_ENV === "production",
+      maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+    },
+  })
+);
+
+// Initialize Passport
+setupAuth();
+app.use(passport.initialize());
+app.use(passport.session());
 
 export function log(message: string, source = "express") {
   const formattedTime = new Date().toLocaleTimeString("en-US", {
