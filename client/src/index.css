@@ -196,6 +196,14 @@
  * need to be distinguished from eachother visually.
  */
 @layer utilities {
+  /* Border color utility for Tailwind v4 compatibility */
+  .border-border {
+    border-color: hsl(var(--border));
+  }
+  .border-border\/50 {
+    border-color: hsl(var(--border) / 0.5);
+  }
+
   /* Mobile PWA styles */
   html, body {
     overscroll-behavior: none;
