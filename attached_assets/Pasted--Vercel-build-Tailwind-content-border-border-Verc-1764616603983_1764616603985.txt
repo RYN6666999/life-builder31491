@@ -1,0 +1,74 @@
+好的 — 日誌顯示 Vercel 在 build 階段仍然沒讀到 Tailwind 的 content（所以沒產生 border-border）。接下來我們要做兩件事：一是用最小破壞的方式在 Vercel build 前檢查執行目錄與檔案是否存在（以釐清是「沒 push / wrong commit」還是「Vercel 沒找到 config / 沒安裝 devDeps」）；二是給出可立即套用的修正（如果需要）。我先把最可靠的診斷步驟與可放進 repo 的 debug 檔案貼給你，照著做能快速定位原因。
+
+快速檢查流程（按序）
+
+確認 Vercel build 用的 commit SHA
+
+在本地查最新 commit： git rev-parse HEAD
+在 Vercel Dashboard → Deployments → 點選失敗的 deployment → 檢查 Commit SHA 是否等於上面輸出。
+若不同：你需要把最新 commit push 到遠端或重新觸發部署。
+驗證 client/ 目錄下的 config 是否存在並包含 content（本地）：
+
+在 repo root 或 CI 模擬 Vite 的執行目錄： cd client node -e "const fs=require('fs'); console.log('cwd:', process.cwd()); console.log('tailwind exists:', fs.existsSync('./tailwind.config.cjs')); if(fs.existsSync('./tailwind.config.cjs')) console.log(fs.readFileSync('./tailwind.config.cjs','utf8'))"
+確保 tailwind.config.cjs 的 content 陣列非空且包含 "./src/**/*.{js,ts,jsx,tsx,html}" 或類似路徑。
+檢查 Vercel install 階段是否安裝 devDependencies（從 Vercel build log 找 install 部分）
+
+搜尋 build logs 裡是否有 tailwindcss、postcss、autoprefixer 的安裝輸出或錯誤。
+若沒有安裝（或安裝失敗），請在 Vercel 設定把 Install Command 改為: npm ci --include=dev 或在 vercel.json 設置 installCommand（範例我會貼）。
+若本地成功、Vercel 仍失敗 → 在 Vercel build 前輸出 debug 資訊（檢查實際執行目錄與檔案存在性）
+
+我建議臨時加入一個簡單的 debug 腳本 scripts/vercel-debug.js，並在 Vercel 的 Build Command 前執行它。這樣你可以直接從 build log 看到 Vercel 的工作目錄與是否能找到 client/tailwind.config.cjs。
+debug 腳本（請加入 repo）
+
+
+scripts/vercel-debug.js
+// scripts/vercel-debug.js
+// 在 Vercel build 開始時印出工作目錄與關鍵檔案是否存在，方便診斷
+const fs = require('fs');
+const path = require('path');
+
+console.log('=== Vercel Build Debug ===');
+在 package.json 新增一個暫時的 script（或直接把它放到 Vercel 的 buildCommand 前執行）： "scripts": { "vercel:debug": "node ./scripts/vercel-debug.js" }
+
+在 Vercel Dashboard（或 vercel.json）把 Build Command 改為（臨時）： node ./scripts/vercel-debug.js && cd client && npm ci --include=dev && npm run build （這會先輸出 debug 到 build log，然後再實際進行 client build）
+
+vercel.json 範例（把 install/build 明確到 client）
+
+
+vercel.json
+v3
+{
+  "version": 2,
+  "installCommand": "cd client && npm ci --include=dev",
+  "buildCommand": "node ./scripts/vercel-debug.js && cd client && npm run build",
+  "outputDirectory": "client/dist/public"
+}
+注意：把 outputDirectory 改成 client build 的實際輸出路徑（如果仍是 dist/public，改為 client/dist/public；請根據你的專案實際輸出調整）。
+
+清除 Vercel Build cache 並重新部署
+
+在 Vercel UI Deployment -> Redeploy -> 選擇 "Redeploy with cleared cache"（或類似選項），以防舊快取導致舊配置被使用。
+若 debug log 顯示檔案不存在或在錯誤路徑
+
+代表 Vercel 的 Project Root 與你預期不同。解法：在 Vercel Project Settings 把 Root 設為 client，或在 vercel.json / buildCommand 裡加 cd client && ...（上面示例已示範）。
+若 debug 顯示檔案存在，但 Tailwind 仍警告 content missing
+
+確認 tailwind.config.cjs 格式正確，且 content 非空。把當前 tailwind.config.cjs 的頭 20 行貼上來我幫你檢查。內容範例應像：
+JavaScript
+module.exports = {
+  content: ['./src/**/*.{js,ts,jsx,tsx,html}', './index.html'],
+  theme: { extend: { colors: { border: 'hsl(var(--border))' } } },
+  plugins: []
+};
+如果一切檔案路徑與安裝都正常，但問題仍然存在 → 把完整 Vercel install & build logs 貼上來（從 "Installing dependencies" 開始到 error 為止），我會逐行分析。
+總結建議（優先順序）
+
+先確認 Vercel commit SHA 與你本地最新 commit 是否一致。
+若一致但 Vercel 仍 fail，立即把 scripts/vercel-debug.js 加入 repo，並暫時把 vercel buildCommand 設為先執行 debug script（或在 Vercel UI 的 build command 手動加上 debug），然後 redeploy with cleared cache。
+檢視 debug 輸出：若檔案不存在，修正 Vercel Project Root 或把 config 放到 client/；若存在但 content empty / invalid，貼出 tailwind.config.cjs 內容給我。
+你想現在先做哪一步？
+
+我幫你生成 git patch（加上 scripts/vercel-debug.js、修改 vercel.json、以及 package.json script）—— 你可以直接 apply & push。
+你先在 Vercel 把 Build Command 改為包含 debug 並 Redeploy（我會等待你貼出新的 debug log）。
+你把 client/tailwind.config.cjs 的前 ~40 行貼上來，我直接幫你檢查 content 配置是否正確。
+選一個（1 / 2 / 3），我就把相應的檔案或下一步指令給你。
