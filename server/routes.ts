@@ -1001,5 +1001,187 @@ export async function registerRoutes(
     }
   });
 
+  // ============ HEALTH DATA (Apple Health Integration) ============
+
+  // Upload Apple Health XML export
+  app.post("/api/health/upload", async (req, res) => {
+    try {
+      const { xmlContent } = req.body;
+      
+      if (!xmlContent) {
+        return res.status(400).json({ error: "XML content is required" });
+      }
+
+      // Get user ID from auth if available
+      const user = req.user as any;
+      const userId = user?.claims?.sub || null;
+
+      // Import parser dynamically
+      const { parseAppleHealthXml, aggregateDailyHealth, getSleepQuality, generateHealthInsights } = await import("./health-parser");
+      
+      const parsed = await parseAppleHealthXml(xmlContent);
+      
+      // Store health data in database
+      const insertedCount = await storage.bulkInsertHealthData(
+        parsed.records.map(r => ({ ...r, userId }))
+      );
+      
+      // Aggregate daily data and create summaries
+      const dailyData = aggregateDailyHealth(parsed.records);
+      const summaries: Array<{ date: Date; summary: any; aiInsights: string }> = [];
+      
+      for (const [dateStr, data] of Array.from(dailyData.entries())) {
+        const summary = {
+          steps: Math.round(data.steps),
+          avgHeartRate: Math.round(data.avgHeartRate),
+          restingHeartRate: Math.round(data.restingHeartRate),
+          hrv: Math.round(data.hrv),
+          sleepHours: Math.round(data.sleepMinutes / 60 * 10) / 10,
+          sleepQuality: getSleepQuality(data.sleepMinutes / 60),
+          activeEnergy: Math.round(data.activeEnergy),
+          exerciseMinutes: Math.round(data.exerciseMinutes),
+          standHours: Math.round(data.standHours),
+          mindfulMinutes: Math.round(data.mindfulMinutes),
+        };
+        
+        const insights = generateHealthInsights({
+          steps: summary.steps,
+          avgHeartRate: summary.avgHeartRate,
+          restingHeartRate: summary.restingHeartRate,
+          hrv: summary.hrv,
+          sleepHours: summary.sleepHours,
+          exerciseMinutes: summary.exerciseMinutes,
+        });
+        
+        summaries.push({
+          date: new Date(dateStr),
+          summary,
+          aiInsights: insights.join("\n"),
+        });
+      }
+      
+      // Store summaries
+      await storage.bulkInsertHealthSummaries(
+        summaries.map(s => ({ ...s, userId }))
+      );
+      
+      res.json({
+        success: true,
+        recordsImported: insertedCount,
+        summariesCreated: summaries.length,
+        dateRange: parsed.summary.dateRange,
+        dataTypes: parsed.summary.dataTypes,
+      });
+    } catch (error) {
+      console.error("Error processing health data:", error);
+      res.status(500).json({ error: "Failed to process health data" });
+    }
+  });
+
+  // Get health summary for a date range
+  app.get("/api/health/summary", async (req, res) => {
+    try {
+      const user = req.user as any;
+      const userId = user?.claims?.sub || null;
+      
+      const { startDate, endDate, days } = req.query;
+      
+      let start: Date;
+      let end: Date = new Date();
+      
+      if (days) {
+        start = new Date();
+        start.setDate(start.getDate() - parseInt(days as string));
+      } else if (startDate) {
+        start = new Date(startDate as string);
+        end = endDate ? new Date(endDate as string) : new Date();
+      } else {
+        start = new Date();
+        start.setDate(start.getDate() - 7);
+      }
+      
+      const summaries = await storage.getHealthSummaries(userId, start, end);
+      res.json(summaries);
+    } catch (error) {
+      console.error("Error fetching health summary:", error);
+      res.status(500).json({ error: "Failed to fetch health summary" });
+    }
+  });
+
+  // Get latest health insights for AI context
+  app.get("/api/health/insights", async (req, res) => {
+    try {
+      const user = req.user as any;
+      const userId = user?.claims?.sub || null;
+      
+      const latestSummary = await storage.getLatestHealthSummary(userId);
+      
+      if (!latestSummary) {
+        return res.json({ 
+          hasData: false,
+          message: "尚未上傳健康數據" 
+        });
+      }
+      
+      res.json({
+        hasData: true,
+        date: latestSummary.date,
+        summary: latestSummary.summary,
+        insights: latestSummary.aiInsights,
+      });
+    } catch (error) {
+      console.error("Error fetching health insights:", error);
+      res.status(500).json({ error: "Failed to fetch health insights" });
+    }
+  });
+
+  // Get health context for AI (formatted for chat)
+  app.get("/api/health/context", async (req, res) => {
+    try {
+      const user = req.user as any;
+      const userId = user?.claims?.sub || null;
+      
+      const days = parseInt(req.query.days as string) || 7;
+      const start = new Date();
+      start.setDate(start.getDate() - days);
+      
+      const summaries = await storage.getHealthSummaries(userId, start, new Date());
+      
+      if (summaries.length === 0) {
+        return res.json({ 
+          hasData: false,
+          context: null 
+        });
+      }
+      
+      // Calculate averages
+      const avgSteps = Math.round(summaries.reduce((sum: number, s: any) => sum + ((s.summary as any)?.steps || 0), 0) / summaries.length);
+      const avgSleep = Math.round(summaries.reduce((sum: number, s: any) => sum + ((s.summary as any)?.sleepHours || 0), 0) / summaries.length * 10) / 10;
+      const avgHeartRate = Math.round(summaries.reduce((sum: number, s: any) => sum + ((s.summary as any)?.avgHeartRate || 0), 0) / summaries.length);
+      const avgExercise = Math.round(summaries.reduce((sum: number, s: any) => sum + ((s.summary as any)?.exerciseMinutes || 0), 0) / summaries.length);
+      
+      const context = `用戶近 ${days} 天健康數據摘要：
+- 平均每日步數：${avgSteps} 步
+- 平均睡眠時長：${avgSleep} 小時
+- 平均心率：${avgHeartRate} bpm
+- 平均運動時間：${avgExercise} 分鐘
+
+最新一天詳細數據：
+${JSON.stringify(summaries[0]?.summary, null, 2)}
+
+AI 洞察：
+${summaries[0]?.aiInsights || "暫無洞察"}`;
+      
+      res.json({
+        hasData: true,
+        context,
+        summaries: summaries.slice(0, 7),
+      });
+    } catch (error) {
+      console.error("Error building health context:", error);
+      res.status(500).json({ error: "Failed to build health context" });
+    }
+  });
+
   return httpServer;
 }

@@ -1,14 +1,16 @@
 import { 
-  users, tasks, monuments, sessions, userSettings, savedLocations,
+  users, tasks, monuments, sessions, userSettings, savedLocations, healthData, healthSummary,
   type User, type InsertUser, 
   type Task, type InsertTask,
   type Monument, type InsertMonument,
   type Session, type InsertSession,
   type UserSettings, type InsertUserSettings,
-  type SavedLocation, type InsertSavedLocation
+  type SavedLocation, type InsertSavedLocation,
+  type HealthData, type InsertHealthData,
+  type HealthSummary, type InsertHealthSummary
 } from "@shared/schema";
 import { db } from "./db";
-import { eq, and, isNull, asc, inArray } from "drizzle-orm";
+import { eq, and, isNull, asc, inArray, gte, lte, desc } from "drizzle-orm";
 
 export interface IStorage {
   // Users
@@ -318,6 +320,85 @@ export class DatabaseStorage implements IStorage {
 
   async deleteSavedLocation(id: string): Promise<void> {
     await db.delete(savedLocations).where(eq(savedLocations.id, id));
+  }
+
+  // Health Data
+  async bulkInsertHealthData(records: InsertHealthData[]): Promise<number> {
+    if (records.length === 0) return 0;
+    
+    const batchSize = 500;
+    let insertedCount = 0;
+    
+    for (let i = 0; i < records.length; i += batchSize) {
+      const batch = records.slice(i, i + batchSize);
+      await db.insert(healthData).values(batch);
+      insertedCount += batch.length;
+    }
+    
+    return insertedCount;
+  }
+
+  async getHealthData(userId: string | null, startDate: Date, endDate: Date): Promise<HealthData[]> {
+    if (userId) {
+      return db.select().from(healthData)
+        .where(and(
+          eq(healthData.userId, userId),
+          gte(healthData.startDate, startDate),
+          lte(healthData.startDate, endDate)
+        ))
+        .orderBy(desc(healthData.startDate));
+    }
+    return db.select().from(healthData)
+      .where(and(
+        gte(healthData.startDate, startDate),
+        lte(healthData.startDate, endDate)
+      ))
+      .orderBy(desc(healthData.startDate));
+  }
+
+  async bulkInsertHealthSummaries(summaries: Omit<InsertHealthSummary, 'id'>[]): Promise<number> {
+    if (summaries.length === 0) return 0;
+    
+    for (const summary of summaries) {
+      await db.insert(healthSummary)
+        .values(summary as InsertHealthSummary)
+        .onConflictDoNothing();
+    }
+    
+    return summaries.length;
+  }
+
+  async getHealthSummaries(userId: string | null, startDate: Date, endDate: Date): Promise<HealthSummary[]> {
+    if (userId) {
+      return db.select().from(healthSummary)
+        .where(and(
+          eq(healthSummary.userId, userId),
+          gte(healthSummary.date, startDate),
+          lte(healthSummary.date, endDate)
+        ))
+        .orderBy(desc(healthSummary.date));
+    }
+    return db.select().from(healthSummary)
+      .where(and(
+        gte(healthSummary.date, startDate),
+        lte(healthSummary.date, endDate)
+      ))
+      .orderBy(desc(healthSummary.date));
+  }
+
+  async getLatestHealthSummary(userId: string | null): Promise<HealthSummary | undefined> {
+    let results;
+    if (userId) {
+      results = await db.select().from(healthSummary)
+        .where(eq(healthSummary.userId, userId))
+        .orderBy(desc(healthSummary.date))
+        .limit(1);
+    } else {
+      results = await db.select().from(healthSummary)
+        .orderBy(desc(healthSummary.date))
+        .limit(1);
+    }
+    return results[0] || undefined;
   }
 }
 
