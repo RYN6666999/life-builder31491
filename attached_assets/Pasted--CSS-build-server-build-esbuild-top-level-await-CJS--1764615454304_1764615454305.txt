@@ -1,0 +1,114 @@
+太好 — 恭喜你把前端 CSS build 問題解掉了。接下來你發現的 server/build（esbuild）錯誤來源是「top-level await 在 CJS 輸出中不支援」。下面我會以連貫的步驟敘述：我觀察到的問題 -> 可行的兩條修復路徑（各給出可 commit 的檔案範例）-> 驗證步驟與建議的最終設定（包含 Vercel / Replit 注意事項）。你可以直接採用其中一個方案並 commit 對應檔案；我也把必要的檔案範例放在下面，方便直接套用。
+
+問題快速回顧（你已確認）
+
+錯誤：server/db.ts:19:19: ERROR: Top-level await is currently not supported with the "cjs" output format
+原因：esbuild 的輸出格式被設定為 "cjs"（CommonJS），而 server/db.ts 使用了 top-level await（ESM feature）。CJS 不支援 top-level await，ESM 則支援。
+兩個可行方案（優先順序與 trade-offs） 方案 1（推薦，改 esbuild 輸出為 ESM）
+
+只要把 build 腳本（script/build.ts 或 esbuild 的設定）將 format 從 "cjs" 改成 "esm"，就能直接支援 top-level await。
+優點：改動小、最快修好、保留原有 async/await 寫法。
+缺點：若你有其他相依套件或部署環境預期 CJS，可能需要檢查相容性（但 Node 20 ESM 支援良好）。
+方案 2（更穩健、無需改 esbuild format）
+
+重構 server/db.ts，消除 top-level await（改成 export 一個初始化函式或導出一個 promise）。
+優點：不改 build 設定，對舊有 CJS 預期相容；更顯式的初始化流程。
+缺點：需調整引用 db 的其他檔案（呼叫初始化或 await 取得 db），改動範圍較大。
+下面我給出兩套可直接 commit 的範例檔案（你選其一套採用即可）。
+
+A) 若採用方案 1：把 esbuild format 改為 "esm"
+
+編輯：script/build.ts（或你專案裡負責 esbuild 的檔案）
+變更：format: "cjs" -> format: "esm"
+
+script/build.ts
+// Example esbuild build script — 調整 format 為 "esm"
+import { build } from "esbuild";
+import { nodeExternalsPlugin } from "esbuild-node-externals";
+
+await build({
+  entryPoints: ["server/index.ts"],
+注意：
+
+若你改為 ESM 輸出，請確保在 Node 啟動時使用 .mjs 檔案或 package.json 中有 "type": "module"（或以 node --input-type=module 執行）。我示範把 outfile 改為 .mjs。
+若你的服務入口是 CJS（例如 dist/server/index.js），請更新啟動與部署命令以正確載入 ESM 檔案。
+B) 若採用方案 2：改 server/db.ts 以移除 top-level await
+
+重構方向 1（export init function） — 最清楚、需要呼叫初始化的地方要 await initDB()
+
+server/db.ts
+v1
+// 範例：移除 top-level await，改為輸出 init 函式
+import { MongoClient } from "mongodb";
+
+const MONGO_URL = process.env.MONGO_URL || "mongodb://localhost:27017/mydb";
+let client: MongoClient | null = null;
+
+使用方式（在其他模組）：
+ts
+import { initDB, getDbClient } from "./server/db";
+
+await initDB(); // 在 server 啟動時呼叫（例如在 server/index.ts 的 main 函式）
+const client = getDbClient();
+重構方向 2（export 一個 promise） — 對使用方較透明但有風險（使用方必須 await promise 有時會忘記）
+
+server/db.ts
+v2
+import { MongoClient } from "mongodb";
+
+const MONGO_URL = process.env.MONGO_URL || "mongodb://localhost:27017/mydb";
+
+export const dbClientPromise = (async () => {
+  const client = new MongoClient(MONGO_URL);
+使用：
+ts
+import { dbClientPromise } from "./server/db";
+const client = await dbClientPromise;
+我推薦的實務做法
+
+若你希望最快回復部署：採用方案 1（改 esbuild output 為 esm），然後測試本地與部署。
+若你偏好最大相容性（或不想改輸出格式），採用方案 2 並在 server 啟動流程中呼叫 initDB()。
+額外（必檢查）部署與環境設定
+
+vercel.json（你已建議過）把 installCommand 設為安裝 dev 依賴，並確保 buildCommand 與 outputDirectory 正確。範例：
+
+vercel.json
+{
+  "version": 2,
+  "installCommand": "npm ci --include=dev",
+  "buildCommand": "npm run build",
+  "outputDirectory": "dist/public"
+}
+.nvmrc（確保 Node 20）：
+
+.nvmrc
+20
+
+package.json：若你改為 ESM，考慮在 package.json 加上 "type": "module"（會影響整個專案如何解析 import/require）：
+
+package.json
+v3
+{
+  "type": "module",
+  ...
+}
+
+（只在你決定全面採 ESM 時才加）
+
+本地 & CI 驗證步驟（順序）
+
+根據選擇做檔案修改並 commit。
+清除舊 build： rm -rf dist node_modules
+安裝： npm ci
+在本地 build： npm run build
+若選方案 1 並產出 .mjs，請用 node --version 確認 Node >= 20，再測試啟動： node dist/server/index.mjs
+若選方案 2，確保 server 啟動程式在啟動前 await initDB()。
+推到 Replit / Vercel 並檢查 build logs。
+我建議你現在採取的下一個實作步驟（單一步驟）
+
+如果想要「最快修好並繼續部署」，在你的 repo 的 script/build.ts 把 format 改為 "esm"（方案 1）。修改後執行一次 npm run build 測試；若成功，再 deploy 到 Vercel。
+如果你願意，我可以：
+
+幫你直接產生一個 commit patch（修改 script/build.ts 為 format:"esm" 並調整 outfile 為 .mjs）— 你要我把 patch 貼出來讓你在 Replit 上 apply 嗎？
+或者幫你改寫 server/db.ts（initDB 版本），並顯示需要更新的其他呼叫端範例（例如 server/index.ts），以便你逐步替換。
+你想我先做哪一個（A 改 esbuild -> esm，或 B 重構 server/db.ts 去掉 top-level await）？我會立刻把相應的檔案變更貼給你。

@@ -1,6 +1,7 @@
 import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
 import { createServer } from "http";
+import { initDatabase } from "./db";
 
 export const app = express();
 export const httpServer = createServer(app);
@@ -71,6 +72,9 @@ let isInitialized = false;
 
 export async function initializeApp() {
   if (isInitialized) return;
+  
+  // Initialize database first
+  await initDatabase();
   
   await registerRoutes(httpServer, app);
   isInitialized = true;
