@@ -1,0 +1,83 @@
+這個錯誤訊息已經很明確：Tailwind 在 Vercel build 時「看不到 content 配置（或 content 為空）」，結果沒產生 color utility（border-border），造成 @apply 失敗。下面是針對此情況的精準檢查清單、可執行命令與直接可放進 repo 的建議檔案（放在 client/，因為 Vite 看起來是從 client 目錄執行）。請依序檢查並執行 — 我把最有可能成功的修法放在最前面。
+
+要點總結（一句話）
+
+問題核心：Vercel build 的執行目錄或 Tailwind config 檔案類型/路徑不對，導致 Tailwind 沒讀到 content 路徑，沒生成 border-border。
+優先檢查項（依序執行，遇到問題就回報對應輸出）
+
+確認 Vercel 用到的是你最新 commit
+
+在 Vercel Dashboard → Deployments → 點開失敗的 deployment → 檢查 Commit SHA 是否與你 push 的一致。
+確認 Vite 在哪個目錄運行（Project Root）
+
+如果前端在 client/，務必將 Vercel 的 Project Root 設為 client，或把 postcss/tailwind config 放到 client/。
+在 repo root 執行查看： ls -la cat client/package.json
+在 Vercel 設定中把 Root 設為 client（或確保 buildCommand 以 cd client && npm run build）。
+本地模擬 Vercel 行為
+
+在 repo root，模擬「Vite 從 client 執行、且安裝 devDependencies」： cd client rm -rf node_modules package-lock.json npm ci --include=dev npm run build
+模擬「沒有 devDependencies」： rm -rf node_modules package-lock.json npm ci --omit=dev npm run build
+如果前者成功而後者失敗，代表 Vercel 必須安裝 devDependencies（或把 tailwind 移到 dependencies）。
+檢查 tailwind.config 是否為 Node-friendly（不要用 .ts）
+
+在 client/（或 Vite root）確認檔案： tailwind.config.cjs 或 tailwind.config.js。若是 tailwind.config.ts，Vercel 在沒有 ts-node 的情況下可能無法 require。
+如果你要保留 .ts，必須確保 postcss.config 能用絕對 path 指向它，且 build 環境能載入 .ts（較複雜）。
+檢查 tailwind.config 的 content 路徑是否包含實際檔案
+
+content 應至少包含 client/src//*.{js,ts,jsx,tsx,html} 或如果 tailwind.config 放在 client/ 且 Vite root 是 client，則 content 可以寫 ./src//*.{js,ts,jsx,tsx,html}
+content 不能為空陣列。
+確認 postcss.config 可被 Vite 在執行目錄找到，且 tailwindcss plugin 指向正確的 config
+
+put postcss.config.cjs into the same directory Vite runs from (client/).
+tailwindcss: { config: "./tailwind.config.cjs" } 或用 path.resolve(__dirname, './tailwind.config.cjs')。
+檢查 index.css 是否仍含 @apply border-border（已改為 native border-color 的話就好）
+
+rg -n '@apply.*border-border' client/src || true
+常見修法（實作檔案範例） 把這兩個檔案放到 client/（如果 Vite root 是 client），然後 commit & push，重新觸發 Vercel build。
+
+client/postcss.config.cjs
+
+client/postcss.config.cjs
+const path = require("path");
+
+module.exports = {
+  plugins: {
+    "tailwindcss/nesting": {},
+    // 指向 client 內可被 require 的 tailwind.config.cjs（使用 cjs 避免 ts require 問題）
+client/tailwind.config.cjs
+
+client/tailwind.config.cjs
+module.exports = {
+  content: [
+    "./src/**/*.{js,ts,jsx,tsx,html}", // 當此檔案放在 client/ 時，這樣就能找到 client/src
+    "./index.html"
+  ],
+  theme: {
+為何放到 client/ 很重要
+
+如果 Vite 的工作目錄是 client，Vite 會在 client 目錄尋找 postcss.config.js、tailwind.config.js（或透過 plugin 指向的 config）。若 postcss.config 在 repo root 而 Vite root 是 client，則 Vercel build 可能無法找到或 path 解析錯誤。把兩個檔案放在 client/ 能避免路徑混淆。
+Vercel 特別項目
+
+Install Command：在 Vercel 的 Project Settings 建議設為: npm ci --include=dev (或在 vercel.json 設 installCommand)
+Build Command（若前端在 client）: cd client && npm run build 或把 Project Root 設為 client，然後 buildCommand 為 npm run build
+確認 Build Logs 中 install 階段有 tailwindcss 與 postcss 被安裝（在 install 的輸出看 list）
+偵錯技巧（如果 deploy 再度失敗，貼上以下內容）
+
+Vercel install 相關 log（完整 install 輸出，從 "Installing dependencies" 開始到 install 完成）
+Vite build 開始前的工作目錄（在 Vercel logs 找到 "Running build command" 那行）
+列出 client 目錄檔案（可以暫時在 buildCommand 前加一個 debug 腳本，或在 local reproduce run: cd client && ls -la && node -e "console.log(process.cwd())"）
+快速驗證清單（本地）
+
+在 repo root（或 client）： cd client rm -rf node_modules package-lock.json npm ci --include=dev npm run build
+
+build 應成功且不再出現 "content option missing" 警告
+模擬失敗情況（若你想確保 Vercel 安裝 devDeps）： rm -rf node_modules package-lock.json npm ci --omit=dev npm run build
+
+若這會失敗，你就必須在 Vercel 確保 devDependencies 被安裝或將必要套件移到 dependencies（短期替代）
+如果你希望我直接產生 git patch（把這兩個檔案加入 client/，並顯示 git diff），我可以把 patch 貼出來，你在 Replit 上直接 apply 並 push。或是你先把 client 目錄下目前的 postcss/tailwind config 貼上來（或說明 Vite 的 root 與 build script），我可給出更精確的調整。你要我做哪一件？
+
+選項： A) 幫你生成 client/postcss.config.cjs + client/tailwind.config.cjs 的 git patch（我貼 patch）
+B) 檢查你目前 repo 的 tailwind/postcss 檔案（你貼出內容）並直接給修改 diff
+C) 幫你檢查 Vercel build log 的 install 階段（你貼更多 build log）
+
+你選 A / B / C？
