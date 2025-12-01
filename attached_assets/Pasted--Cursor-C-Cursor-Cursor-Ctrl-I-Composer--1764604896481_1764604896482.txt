@@ -1,0 +1,77 @@
+🛠️ 修復步驟：召喚 Cursor (C 員工)
+我們不需要手動去翻設定檔，直接叫 Cursor 把缺少的色票補進去就好。
+
+請打開 Cursor，按下 Ctrl + I (Composer)，複製貼上以下指令：
+
+Markdown
+
+# 🚑 Fix Tailwind CSS Build Error
+
+**Context:**
+The Vercel deployment failed with a CSS error: `The 'border-border' class does not exist` in `client/src/index.css`.
+This means the `tailwind.config.ts` (or .js) in the `client` folder is missing the custom color definitions required by Shadcn UI.
+
+**Action Required:**
+Please update `client/tailwind.config.ts`.
+Extend the `theme.colors` to include the standard Shadcn UI color tokens.
+
+**Please make sure the config includes at least these:**
+```typescript
+{
+  theme: {
+    extend: {
+      colors: {
+        border: "hsl(var(--border))",
+        input: "hsl(var(--input))",
+        ring: "hsl(var(--ring))",
+        background: "hsl(var(--background))",
+        foreground: "hsl(var(--foreground))",
+        primary: {
+          DEFAULT: "hsl(var(--primary))",
+          foreground: "hsl(var(--primary-foreground))",
+        },
+        secondary: {
+          DEFAULT: "hsl(var(--secondary))",
+          foreground: "hsl(var(--secondary-foreground))",
+        },
+        destructive: {
+          DEFAULT: "hsl(var(--destructive))",
+          foreground: "hsl(var(--destructive-foreground))",
+        },
+        muted: {
+          DEFAULT: "hsl(var(--muted))",
+          foreground: "hsl(var(--muted-foreground))",
+        },
+        accent: {
+          DEFAULT: "hsl(var(--accent))",
+          foreground: "hsl(var(--accent-foreground))",
+        },
+        popover: {
+          DEFAULT: "hsl(var(--popover))",
+          foreground: "hsl(var(--popover-foreground))",
+        },
+        card: {
+          DEFAULT: "hsl(var(--card))",
+          foreground: "hsl(var(--card-foreground))",
+        },
+      },
+      borderRadius: {
+        lg: "var(--radius)",
+        md: "calc(var(--radius) - 2px)",
+        sm: "calc(var(--radius) - 4px)",
+      },
+    },
+  },
+}
+Also, verify that client/src/index.css defines these CSS variables (e.g., --border, --input) in the :root layer.
+
+
+---
+
+### 👣 執行後的動作
+
+1.  Cursor 改完後，記得 **Git Push** 到 GitHub。
+2.  回到 **Vercel**，去 Deployments 頁面。
+3.  它應該會自動偵測到新的 Commit 並開始重新部署（如果沒有，手動按 **Redeploy**）。
+
+**這次補上顏色的定義後，那個紅色的 CSS 錯誤就會消失了！**
