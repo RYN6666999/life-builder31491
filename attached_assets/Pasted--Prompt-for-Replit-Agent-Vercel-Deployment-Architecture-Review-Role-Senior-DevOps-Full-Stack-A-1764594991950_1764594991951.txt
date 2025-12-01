@@ -1,0 +1,73 @@
+📋 Prompt for Replit Agent: Vercel Deployment Architecture Review
+Role: Senior DevOps & Full-Stack Architect Objective: Review and validate a refactoring plan to deploy this Express (Backend) + Vite (Frontend) monorepo to Vercel.
+
+Current Context: We are moving from Replit hosting to Vercel + Supabase. The current setup fails on Vercel because Vercel treats it as a static site and doesn't know how to run the long-running Express server.
+
+The Proposed Refactoring Plan: I intend to convert the Express server into Vercel-compatible Serverless Functions and serve the Vite frontend as static assets.
+
+Please review the following 4 implementation steps. Do not execute yet, just validate if this logic is sound for our current codebase.
+
+Step 1: vercel.json (Routing Logic)
+We will create this file in the root to handle routing between the API and the Client.
+
+JSON
+
+{
+  "version": 2,
+  "rewrites": [
+    { "source": "/api/(.*)", "destination": "/api/index" },
+    { "source": "/(.*)", "destination": "/dist/index.html" }
+  ]
+}
+Step 2: package.json (Build Logic)
+We need to update scripts to build both sides and remove Neon dependencies in favor of standard Postgres.
+
+JSON
+
+"scripts": {
+  "dev": "tsx server/index.ts",
+  "build": "npm run build:client && npm run build:server",
+  "build:client": "vite build",
+  "build:server": "tsc server/index.ts --outDir api --esModuleInterop --skipLibCheck",
+  "check": "tsc"
+}
+Dependencies to remove: @neondatabase/serverless Dependencies to add: pg, @types/pg
+
+Step 3: server/db.ts (Supabase Connection)
+We are switching to Supabase (Transaction Pooler port 6543). We need to replace the Neon adapter with the standard pg pool.
+
+TypeScript
+
+import { drizzle } from "drizzle-orm/node-postgres";
+import { Pool } from "pg";
+import * as schema from "@shared/schema";
+
+if (!process.env.DATABASE_URL) {
+  throw new Error("DATABASE_URL must be set.");
+}
+
+// Connection Pool for Supabase (Transaction Mode)
+export const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  max: 20,
+  idleTimeoutMillis: 30000,
+  connectionTimeoutMillis: 2000,
+});
+
+export const db = drizzle(pool, { schema });
+Step 4: server/index.ts (Serverless Entry)
+We need to export the Express app so Vercel can wrap it as a Serverless Function.
+
+TypeScript
+
+// ... existing code ...
+// At the end of the file:
+export default app;
+❓ Questions for You (Double Check):
+Directory Structure: Based on your knowledge of the current project structure, is client/dist the correct output folder for Vite, or should I adjust the vercel.json rewrite destination?
+
+Server Entry: Does compiling server/index.ts to api/index.js (via tsc) correctly align with Vercel's expectation for the /api route rewrites?
+
+Database: Will removing @neondatabase/serverless break any existing Drizzle configurations, or is swapping to node-postgres (pg) safe given our schema?
+
+If this plan looks solid, please proceed to implement these changes.
