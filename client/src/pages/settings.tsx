@@ -1,8 +1,8 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useLocation } from "wouter";
-import { ChevronLeft, User, Palette, Key, Cloud, Plug, Sun, Moon, Check, Upload, Download, AlertCircle, Activity, LogOut } from "lucide-react";
-import { SiGoogle } from "react-icons/si";
+import { ChevronLeft, User, Palette, Key, Cloud, Plug, Sun, Moon, Check, Upload, Download, AlertCircle, Activity, LogOut, FileUp, Heart, Footprints, Moon as MoonIcon, Flame, Loader2 } from "lucide-react";
+import { SiGoogle, SiApple } from "react-icons/si";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -11,9 +11,224 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Switch } from "@/components/ui/switch";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Textarea } from "@/components/ui/textarea";
+import { Progress } from "@/components/ui/progress";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import type { UserSettings } from "@shared/schema";
+
+interface HealthInsights {
+  hasData: boolean;
+  date?: string;
+  summary?: {
+    steps: number;
+    avgHeartRate: number;
+    sleepHours: number;
+    activeEnergy: number;
+    exerciseMinutes: number;
+  };
+  insights?: string;
+  message?: string;
+}
+
+function HealthUpload() {
+  const { toast } = useToast();
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
+
+  const { data: healthInsights, isLoading: loadingInsights } = useQuery<HealthInsights>({
+    queryKey: ["/api/health/insights"],
+  });
+
+  const uploadMutation = useMutation({
+    mutationFn: async (xmlContent: string) => {
+      const response = await apiRequest("POST", "/api/health/upload", { xmlContent });
+      return response.json();
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/health/insights"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/health/summary"] });
+      toast({
+        title: "健康數據已匯入",
+        description: `成功匯入 ${data.recordsImported} 筆記錄，建立 ${data.summariesCreated} 天的摘要`,
+      });
+      setIsUploading(false);
+      setUploadProgress(0);
+    },
+    onError: () => {
+      toast({
+        title: "匯入失敗",
+        description: "無法處理健康數據檔案，請確認格式正確",
+        variant: "destructive",
+      });
+      setIsUploading(false);
+      setUploadProgress(0);
+    },
+  });
+
+  const handleFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    if (!file.name.endsWith(".xml") && !file.name.endsWith(".zip")) {
+      toast({
+        title: "格式錯誤",
+        description: "請選擇 Apple Health 匯出的 XML 檔案",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsUploading(true);
+    setUploadProgress(10);
+
+    try {
+      const reader = new FileReader();
+      reader.onprogress = (e) => {
+        if (e.lengthComputable) {
+          const progress = (e.loaded / e.total) * 50 + 10;
+          setUploadProgress(Math.min(progress, 50));
+        }
+      };
+      reader.onload = async (e) => {
+        const xmlContent = e.target?.result as string;
+        setUploadProgress(60);
+        uploadMutation.mutate(xmlContent);
+        setUploadProgress(80);
+      };
+      reader.readAsText(file);
+    } catch (error) {
+      toast({
+        title: "讀取失敗",
+        description: "無法讀取檔案",
+        variant: "destructive",
+      });
+      setIsUploading(false);
+      setUploadProgress(0);
+    }
+
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
+  };
+
+  return (
+    <div className="space-y-4">
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept=".xml"
+        className="hidden"
+        onChange={handleFileSelect}
+        data-testid="input-health-file"
+      />
+
+      {!healthInsights?.hasData ? (
+        <div className="space-y-4">
+          <div className="p-4 rounded-lg border border-dashed border-muted-foreground/30 text-center">
+            <SiApple className="h-10 w-10 mx-auto mb-3 text-muted-foreground" />
+            <p className="text-sm text-muted-foreground mb-4">
+              從 iPhone 的「健康」App 匯出資料後上傳
+            </p>
+            <Button
+              className="w-full"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={isUploading}
+              data-testid="button-upload-health"
+            >
+              {isUploading ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  處理中...
+                </>
+              ) : (
+                <>
+                  <FileUp className="h-4 w-4 mr-2" />
+                  選擇健康數據檔案
+                </>
+              )}
+            </Button>
+          </div>
+          {isUploading && (
+            <Progress value={uploadProgress} className="h-2" />
+          )}
+          <div className="text-xs text-muted-foreground space-y-1">
+            <p>匯出步驟：</p>
+            <ol className="list-decimal list-inside space-y-0.5 pl-2">
+              <li>開啟 iPhone 的「健康」App</li>
+              <li>點選右上角頭像</li>
+              <li>滑到最下方，點選「匯出所有健康資料」</li>
+              <li>解壓縮後上傳 export.xml 檔案</li>
+            </ol>
+          </div>
+        </div>
+      ) : (
+        <div className="space-y-4">
+          <div className="grid grid-cols-2 gap-3">
+            <div className="p-3 rounded-lg bg-blue-500/10 border border-blue-500/30">
+              <div className="flex items-center gap-2 text-blue-500 mb-1">
+                <Footprints className="h-4 w-4" />
+                <span className="text-xs">步數</span>
+              </div>
+              <p className="text-lg font-semibold">
+                {healthInsights.summary?.steps?.toLocaleString() || "---"}
+              </p>
+            </div>
+            <div className="p-3 rounded-lg bg-red-500/10 border border-red-500/30">
+              <div className="flex items-center gap-2 text-red-500 mb-1">
+                <Heart className="h-4 w-4" />
+                <span className="text-xs">心率</span>
+              </div>
+              <p className="text-lg font-semibold">
+                {healthInsights.summary?.avgHeartRate || "---"} <span className="text-xs font-normal">bpm</span>
+              </p>
+            </div>
+            <div className="p-3 rounded-lg bg-purple-500/10 border border-purple-500/30">
+              <div className="flex items-center gap-2 text-purple-500 mb-1">
+                <MoonIcon className="h-4 w-4" />
+                <span className="text-xs">睡眠</span>
+              </div>
+              <p className="text-lg font-semibold">
+                {healthInsights.summary?.sleepHours || "---"} <span className="text-xs font-normal">小時</span>
+              </p>
+            </div>
+            <div className="p-3 rounded-lg bg-orange-500/10 border border-orange-500/30">
+              <div className="flex items-center gap-2 text-orange-500 mb-1">
+                <Flame className="h-4 w-4" />
+                <span className="text-xs">運動</span>
+              </div>
+              <p className="text-lg font-semibold">
+                {healthInsights.summary?.exerciseMinutes || "---"} <span className="text-xs font-normal">分鐘</span>
+              </p>
+            </div>
+          </div>
+
+          {healthInsights.insights && (
+            <div className="p-3 rounded-lg bg-muted/50">
+              <p className="text-sm text-muted-foreground whitespace-pre-wrap">
+                {healthInsights.insights}
+              </p>
+            </div>
+          )}
+
+          <div className="flex items-center justify-between text-xs text-muted-foreground">
+            <span>最後更新: {healthInsights.date ? new Date(healthInsights.date).toLocaleDateString("zh-TW") : "---"}</span>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={isUploading}
+              data-testid="button-update-health"
+            >
+              <Upload className="h-3 w-3 mr-1" />
+              更新數據
+            </Button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 
 const AI_PERSONAS = [
   {
@@ -401,15 +616,31 @@ export default function Settings() {
           </TabsContent>
 
           <TabsContent value="cloud" className="space-y-4">
-            {/* Google Fit Authentication */}
+            {/* Apple Health Data Upload */}
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <Activity className="h-5 w-5 text-green-500" />
-                  生物數據同步
+                  健康數據
                 </CardTitle>
                 <CardDescription>
-                  連接 Google Fit 以同步你的健康數據（活動、睡眠、心率）
+                  上傳 Apple Health 健康數據讓 AI 提供個人化建議
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <HealthUpload />
+              </CardContent>
+            </Card>
+
+            {/* Account / Login */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <User className="h-5 w-5" />
+                  帳戶
+                </CardTitle>
+                <CardDescription>
+                  登入以同步資料到雲端
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
@@ -417,7 +648,7 @@ export default function Settings() {
                   <div className="flex items-center gap-3 p-4 rounded-lg border border-yellow-500/30 bg-yellow-500/5">
                     <AlertCircle className="h-5 w-5 text-yellow-500" />
                     <p className="text-sm text-muted-foreground">
-                      Google OAuth 尚未設定，請先在環境變數中加入 GOOGLE_CLIENT_ID 和 GOOGLE_CLIENT_SECRET
+                      登入功能尚未設定
                     </p>
                   </div>
                 ) : authStatus?.authenticated && authStatus.user ? (
@@ -442,24 +673,15 @@ export default function Settings() {
                       </div>
                       <Check className="h-5 w-5 text-green-500" />
                     </div>
-                    <div className="flex gap-2">
-                      <Button
-                        className="flex-1 flex items-center gap-2"
-                        variant="outline"
-                        data-testid="button-sync-biodata"
-                      >
-                        <Activity className="h-4 w-4" />
-                        同步生物數據
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="icon"
-                        onClick={handleLogout}
-                        data-testid="button-logout"
-                      >
-                        <LogOut className="h-4 w-4" />
-                      </Button>
-                    </div>
+                    <Button
+                      variant="outline"
+                      className="w-full flex items-center gap-2"
+                      onClick={handleLogout}
+                      data-testid="button-logout"
+                    >
+                      <LogOut className="h-4 w-4" />
+                      登出
+                    </Button>
                   </div>
                 ) : (
                   <Button
