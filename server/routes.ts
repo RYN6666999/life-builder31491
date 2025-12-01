@@ -16,6 +16,7 @@ import {
   listUpcomingEvents,
   deleteCalendarEvent
 } from "./google-calendar";
+import { handlePlacesSearch, handlePlacePhoto, searchNearbyPlaces, formatPlacesForChat } from "./google-places";
 import { setupReplitAuth } from "./replitAuth";
 
 export async function registerRoutes(
@@ -763,6 +764,20 @@ export async function registerRoutes(
       console.error("Error deleting calendar event:", error);
       res.status(500).json({ error: "Failed to delete calendar event" });
     }
+  });
+
+  // ============ GOOGLE PLACES (Reality Resource Map) ============
+
+  // Search nearby places
+  app.post("/api/places/search", handlePlacesSearch);
+
+  // Proxy for place photos (hides API key from client)
+  app.get("/api/places/photo", handlePlacePhoto);
+
+  // Check if Places API is configured
+  app.get("/api/places/status", (req, res) => {
+    const configured = !!process.env.GOOGLE_API_KEY;
+    res.json({ configured });
   });
 
   return httpServer;

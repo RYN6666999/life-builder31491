@@ -149,3 +149,31 @@ Preferred communication style: Simple, everyday language.
 - SameSite=lax for CSRF protection
 - Token refresh for expired access tokens
 - Sessions stored in PostgreSQL with TTL
+
+### Google Places Integration (Reality Resource Map)
+
+**Purpose**: Enables users to find nearby real-world resources (gym, library, cafe, etc.) to support their life goals.
+
+**API Endpoints**:
+- `POST /api/places/search`: Search for nearby places
+  - Request: `{ keyword, latitude, longitude, radius?, maxResults? }`
+  - Response: `{ places: PlaceResult[] }`
+- `GET /api/places/photo`: Proxy for place photos (hides API key)
+  - Query: `?ref={photoReference}`
+  - Response: Image binary
+- `GET /api/places/status`: Check if Places API is configured
+
+**Frontend Components**:
+- `use-places.ts`: Hook for geolocation and places search
+- `places-card.tsx`: Displays search results with ratings, distance, and Google Maps links
+- Integrated into `collaborative-chat.tsx` via MapPin button
+
+**Security**: API key is never exposed to clients - photos are proxied through server
+
+**Default Keywords by Monument**:
+- Career → coworking
+- Wealth → bank
+- Emotion → spa
+- Family → park
+- Health → gym
+- Experience → museum

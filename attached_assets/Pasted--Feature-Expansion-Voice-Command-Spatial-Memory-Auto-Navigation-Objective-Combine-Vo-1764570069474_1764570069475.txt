@@ -1,0 +1,46 @@
+# 🗺️ Feature Expansion: Voice Command, Spatial Memory & Auto-Navigation
+
+**Objective:** Combine "Voice Interaction", "Saved Locations (Memory)", and "Real-time Travel Calculation" to create a hands-free navigation experience.
+
+## 1. Voice Interface (The Input Layer)
+* **UI:** Add a "Microphone" Floating Action Button (FAB) near the chat input.
+* **Tech:** Use native `window.SpeechRecognition` (Web Speech API).
+* **Behavior:**
+    * **Touch-to-Talk:** User holds to speak.
+    * **Auto-Send:** On release, convert speech to text and send to Gemini.
+    * **Voice Feedback:** Use `window.speechSynthesis` to read Gemini's short summary aloud (e.g., "Setting course for Secret Base, 15 mins away").
+
+## 2. Spatial Memory (Database Layer)
+* **New Table:** `saved_locations`
+    * `id` (UUID)
+    * `user_id` (UUID)
+    * `name` (Text) - e.g., "Home", "Office", "Secret Base".
+    * `address` (Text) - Optional display string.
+    * `lat` (Float), `lng` (Float) - Crucial for navigation.
+
+## 3. New Tools Definition (The Brain)
+
+### Tool A: `save_current_location`
+* **Intent:** "Remember this place as 'The Sanctuary'."
+* **Logic:** Use browser's `navigator.geolocation` to get current Lat/Lng and insert into `saved_locations` with the user-provided name.
+
+### Tool B: `calculate_travel_time`
+* **Intent:** "Can I make it there in 20 mins?"
+* **API:** Google Distance Matrix API.
+* **Logic:** Calculate duration from User's Current Location to the Target (Saved Location or Google Place).
+
+### Tool C: `Maps_to`
+* **Intent:** "Take me to [Place Name]."
+* **Logic:**
+    1.  **Search:** First check `saved_locations` (Internal Memory). If not found, call `find_nearby_resource` (External Google Places).
+    2.  **Action:** Return a **Deep Link** to open Google Maps App: `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}&travelmode=driving`.
+    3.  **Side Effect:** Automatically call `time_block` to reserve the travel duration in the Calendar.
+
+## 4. User Story Example
+* **User (Voice):** "Jarvis, take me to the Secret Base."
+* **AI:** "Locating Secret Base... It's 12 minutes away with current traffic. Navigation starting now." (Opens Maps + Blocks Calendar).
+
+## Action
+1. Create `saved_locations` table.
+2. Implement the Voice Interface components.
+3. Define the 3 tools (`save_current_location`, `calculate_travel_time`, `Maps_to`) and bind them to Gemini.

@@ -20,13 +20,16 @@ import {
   Zap,
   ListTodo,
   ImagePlus,
-  X
+  X,
+  MapPin
 } from "lucide-react";
 import { hapticLight, hapticMedium, hapticSuccess } from "@/lib/haptics";
 import { cn } from "@/lib/utils";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { MonumentConfig } from "@/lib/monuments";
 import type { Task } from "@shared/schema";
+import { usePlacesSearch, type PlaceResult } from "@/hooks/use-places";
+import { PlacesCard, PlacesLoadingCard } from "@/components/places-card";
 
 export interface ImageAttachment {
   data: string; // base64 encoded
@@ -332,9 +335,13 @@ export function CollaborativeChat({
   const [input, setInput] = useState("");
   const [isTaskListOpen, setIsTaskListOpen] = useState(true);
   const [pendingImages, setPendingImages] = useState<ImageAttachment[]>([]);
+  const [placesResults, setPlacesResults] = useState<{ keyword: string; places: PlaceResult[] } | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  
+  // Places search hook
+  const { searchNearby, loading: placesLoading } = usePlacesSearch();
 
   // Fetch tasks for this session
   const { data: tasks = [], refetch: refetchTasks } = useQuery<Task[]>({
@@ -410,6 +417,41 @@ export function CollaborativeChat({
       setInput("");
       setPendingImages([]);
     }
+  };
+
+  const handlePlacesSearch = async () => {
+    if (!input.trim()) {
+      const defaultKeywords: Record<string, string> = {
+        career: "coworking",
+        wealth: "bank",
+        emotion: "spa",
+        family: "park",
+        health: "gym",
+        experience: "museum",
+      };
+      const keyword = defaultKeywords[monument.slug] || "cafe";
+      hapticLight();
+      try {
+        const results = await searchNearby(keyword, { radius: 2000, maxResults: 5 });
+        setPlacesResults({ keyword, places: results });
+      } catch (error) {
+        console.error("Places search error:", error);
+      }
+    } else {
+      hapticLight();
+      try {
+        const results = await searchNearby(input.trim(), { radius: 2000, maxResults: 5 });
+        setPlacesResults({ keyword: input.trim(), places: results });
+      } catch (error) {
+        console.error("Places search error:", error);
+      }
+    }
+  };
+
+  const handleSelectPlace = (place: PlaceResult) => {
+    hapticMedium();
+    onSendMessage(`我想去「${place.name}」，距離約 ${place.distance}公尺`);
+    setPlacesResults(null);
   };
 
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -560,6 +602,27 @@ export function CollaborativeChat({
         </Collapsible>
       )}
 
+      {/* Places Results */}
+      {placesLoading && <PlacesLoadingCard />}
+      {placesResults && !placesLoading && (
+        <div className="px-4 py-2 border-t border-border bg-card/30">
+          <PlacesCard
+            places={placesResults.places}
+            keyword={placesResults.keyword}
+            onSelectPlace={handleSelectPlace}
+          />
+          <Button
+            variant="ghost"
+            size="sm"
+            className="w-full mt-2 text-xs text-muted-foreground"
+            onClick={() => setPlacesResults(null)}
+            data-testid="button-close-places"
+          >
+            關閉搜尋結果
+          </Button>
+        </div>
+      )}
+
       {/* Input */}
       <form 
         onSubmit={handleSubmit}
@@ -607,6 +670,17 @@ export function CollaborativeChat({
             data-testid="button-upload-image"
           >
             <ImagePlus className="w-5 h-5" />
+          </Button>
+          <Button
+            type="button"
+            size="icon"
+            variant="outline"
+            onClick={handlePlacesSearch}
+            disabled={isLoading || placesLoading}
+            title="搜尋附近地點"
+            data-testid="button-search-places"
+          >
+            <MapPin className="w-5 h-5" />
           </Button>
           <Input
             ref={inputRef}
