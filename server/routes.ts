@@ -2,6 +2,10 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage, initializeMonuments } from "./storage";
 import { chat, classifyIntent, type ChatMode } from "./gemini";
+import { GoogleGenAI } from "@google/genai";
+
+// Initialize Gemini AI client for voice mode
+const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || "" });
 import { insertTaskSchema, insertSessionSchema, insertUserSettingsSchema } from "@shared/schema";
 import { z } from "zod";
 import { 
@@ -589,6 +593,65 @@ export async function registerRoutes(
     } catch (error) {
       console.error("Error in chat:", error);
       res.status(500).json({ error: "Failed to process chat" });
+    }
+  });
+
+  // ============ VOICE MODE CHAT ============
+  
+  // Voice mode chat endpoint - optimized for spoken responses
+  app.post("/api/voice-chat", async (req, res) => {
+    try {
+      const { message, persona = "spiritual" } = req.body;
+      
+      if (!message) {
+        return res.status(400).json({ error: "Message is required" });
+      }
+
+      // Get user settings for personalization
+      const settings = await storage.getUserSettings();
+      const nickname = settings?.nickname || "來地球玩的大師";
+      
+      // Voice-optimized system prompt
+      const voiceSystemPrompt = `你是「數據精靈」，${nickname}的人生導師。
+
+你正在進行語音對話，請：
+1. 保持回應簡潔，適合口語朗讀（2-4句話）
+2. 不要使用 markdown 符號如 * # - 或項目符號
+3. 語氣溫暖、有同理心，像朋友聊天
+4. 直接回應用戶的問題或情緒
+5. 如果用戶表達困惑或情緒，給予支持和清晰的建議
+
+人設風格：${persona === "spiritual" ? "靈性智慧導師，使用能量與意識的語言" : 
+             persona === "coach" ? "實用型教練，專注解決問題" : 
+             persona === "pm" ? "專案經理，注重效率與執行" : "自然友善的對話夥伴"}`;
+
+      // Call Gemini with voice-optimized settings
+      const response = await ai.models.generateContent({
+        model: "gemini-1.5-flash",
+        contents: [
+          { role: "user", parts: [{ text: message }] }
+        ],
+        config: {
+          systemInstruction: voiceSystemPrompt,
+          temperature: 0.7,
+          topP: 0.9,
+          topK: 40,
+          maxOutputTokens: 200, // Keep responses short for voice
+        },
+      });
+
+      const aiResponse = response.text || "我在這裡，請繼續說。";
+      
+      // Clean up response for TTS (remove any remaining markdown)
+      const cleanResponse = aiResponse
+        .replace(/[*#_~`]/g, "")
+        .replace(/\n+/g, " ")
+        .trim();
+
+      res.json({ response: cleanResponse });
+    } catch (error) {
+      console.error("Error in voice chat:", error);
+      res.status(500).json({ error: "Failed to process voice chat" });
     }
   });
 

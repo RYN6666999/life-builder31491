@@ -1,6 +1,6 @@
-import { Home, Mountain, History, Settings, Plus } from "lucide-react";
+import { Home, Mountain, History, Settings, Plus, Headphones } from "lucide-react";
 import { useLocation } from "wouter";
-import { hapticLight, hapticSuccess } from "@/lib/haptics";
+import { hapticLight, hapticSuccess, hapticMedium } from "@/lib/haptics";
 import { cn } from "@/lib/utils";
 
 export type NavTab = "home" | "monuments" | "history" | "settings";
@@ -11,11 +11,11 @@ interface BottomNavProps {
   onCreateProject?: () => void;
 }
 
-const navItems: { id: NavTab | "create"; icon: typeof Home; label: string }[] = [
+const navItems: { id: NavTab | "create" | "voice"; icon: typeof Home; label: string }[] = [
   { id: "home", icon: Home, label: "首頁" },
   { id: "monuments", icon: Mountain, label: "奇觀" },
   { id: "create", icon: Plus, label: "建立" },
-  { id: "history", icon: History, label: "歷史" },
+  { id: "voice", icon: Headphones, label: "通話" },
   { id: "settings", icon: Settings, label: "設定" },
 ];
 
@@ -30,8 +30,9 @@ export function BottomNav({ activeTab, onTabChange, onCreateProject }: BottomNav
       <div className="flex items-center justify-around h-full max-w-lg mx-auto">
         {navItems.map((item) => {
           const Icon = item.icon;
-          const isActive = item.id !== "create" && activeTab === item.id;
+          const isActive = item.id !== "create" && item.id !== "voice" && activeTab === item.id;
           const isCreateButton = item.id === "create";
+          const isVoiceButton = item.id === "voice";
 
           if (isCreateButton) {
             return (
@@ -49,6 +50,27 @@ export function BottomNav({ activeTab, onTabChange, onCreateProject }: BottomNav
                   <div className="absolute inset-0 rounded-full bg-white/10 animate-pulse" />
                 </div>
                 <span className="text-xs mt-1 text-primary font-medium">
+                  {item.label}
+                </span>
+              </button>
+            );
+          }
+
+          if (isVoiceButton) {
+            return (
+              <button
+                key={item.id}
+                onClick={() => {
+                  hapticMedium();
+                  setLocation("/voice");
+                }}
+                className="flex flex-col items-center justify-center w-16 h-full"
+                data-testid="nav-voice"
+              >
+                <div className="relative p-2 rounded-xl transition-all hover:bg-primary/10">
+                  <Icon className="w-5 h-5 text-muted-foreground transition-transform hover:scale-110" />
+                </div>
+                <span className="text-xs mt-1 text-muted-foreground">
                   {item.label}
                 </span>
               </button>

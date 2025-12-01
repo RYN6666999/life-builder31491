@@ -6,6 +6,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { ThemeProvider } from "@/components/theme-provider";
 import Home from "@/pages/home";
 import Settings from "@/pages/settings";
+import VoiceMode from "@/pages/voice-mode";
 import NotFound from "@/pages/not-found";
 
 function Router() {
@@ -13,6 +14,7 @@ function Router() {
     <Switch>
       <Route path="/" component={Home} />
       <Route path="/settings" component={Settings} />
+      <Route path="/voice" component={VoiceMode} />
       <Route component={NotFound} />
     </Switch>
   );
