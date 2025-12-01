@@ -69,11 +69,38 @@ export default function Home() {
   useEffect(() => {
     const cached = loadConversation();
     if (cached) {
-      setFlowStep(cached.flowStep as FlowStep);
-      setFlowType(cached.flowType);
-      setMessages(cached.messages);
-      setSedonaMessages(cached.sedonaMessages);
-      setSedonaStep(cached.sedonaStep);
+      // For "chat" step, we can't restore sessionId (server-side), so fall back to state-check
+      // For "tasks" step, we need selectedMonument which we can restore from cache
+      if (cached.flowStep === "chat") {
+        // Can't restore chat without sessionId, reset to state-check
+        setFlowStep("state-check");
+        setFlowType(null);
+        setMessages([]);
+        clearConversation();
+      } else if (cached.flowStep === "tasks" && cached.monumentSlug) {
+        // Restore monument and go to tasks
+        const monument = MONUMENTS.find(m => m.slug === cached.monumentSlug);
+        if (monument) {
+          setSelectedMonument(monument);
+          setFlowStep("tasks");
+          setFlowType(cached.flowType);
+        } else {
+          setFlowStep("state-check");
+        }
+      } else if (cached.flowStep === "sedona") {
+        // Sedona doesn't require sessionId or selectedMonument
+        setFlowStep("sedona");
+        setFlowType(cached.flowType);
+        setSedonaMessages(cached.sedonaMessages);
+        setSedonaStep(cached.sedonaStep);
+      } else {
+        // Default: monument-selection or state-check
+        setFlowStep(cached.flowStep as FlowStep);
+        setFlowType(cached.flowType);
+        setMessages(cached.messages);
+        setSedonaMessages(cached.sedonaMessages);
+        setSedonaStep(cached.sedonaStep);
+      }
     }
   }, []);
 
