@@ -249,3 +249,78 @@ export const insertSavedLocationSchema = createInsertSchema(savedLocations).omit
 
 export type SavedLocation = typeof savedLocations.$inferSelect;
 export type InsertSavedLocation = z.infer<typeof insertSavedLocationSchema>;
+
+// Health Data table - for storing Apple Health / fitness data
+export const healthDataTypeEnum = pgEnum("health_data_type", [
+  "steps",
+  "heart_rate", 
+  "heart_rate_variability",
+  "resting_heart_rate",
+  "sleep",
+  "active_energy",
+  "exercise_minutes",
+  "stand_hours",
+  "walking_distance",
+  "flights_climbed",
+  "mindful_minutes",
+  "respiratory_rate",
+  "blood_oxygen",
+  "body_temperature"
+]);
+
+export const healthData = pgTable("health_data", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").references(() => replitUsers.id),
+  dataType: healthDataTypeEnum("data_type").notNull(),
+  value: text("value").notNull(),
+  unit: text("unit").notNull(),
+  startDate: timestamp("start_date").notNull(),
+  endDate: timestamp("end_date"),
+  source: text("source"),
+  metadata: jsonb("metadata").$type<{
+    device?: string;
+    sourceName?: string;
+    sourceVersion?: string;
+    creationDate?: string;
+  }>(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const insertHealthDataSchema = createInsertSchema(healthData).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type HealthData = typeof healthData.$inferSelect;
+export type InsertHealthData = z.infer<typeof insertHealthDataSchema>;
+
+// Health Summary - aggregated daily/weekly health insights
+export const healthSummary = pgTable("health_summary", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").references(() => replitUsers.id),
+  date: timestamp("date").notNull(),
+  summary: jsonb("summary").$type<{
+    steps?: number;
+    avgHeartRate?: number;
+    restingHeartRate?: number;
+    hrv?: number;
+    sleepHours?: number;
+    sleepQuality?: "poor" | "fair" | "good" | "excellent";
+    activeEnergy?: number;
+    exerciseMinutes?: number;
+    standHours?: number;
+    mindfulMinutes?: number;
+  }>(),
+  aiInsights: text("ai_insights"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertHealthSummarySchema = createInsertSchema(healthSummary).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type HealthSummary = typeof healthSummary.$inferSelect;
+export type InsertHealthSummary = z.infer<typeof insertHealthSummarySchema>;
