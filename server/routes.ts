@@ -30,10 +30,21 @@ export async function registerRoutes(
   
   // Check if Google Auth is configured
   app.get("/api/auth/status", (req, res) => {
+    // Sanitize user data - don't expose tokens to frontend
+    let sanitizedUser = null;
+    if (req.user) {
+      sanitizedUser = {
+        id: req.user.id,
+        googleId: req.user.googleId,
+        email: req.user.email,
+        displayName: req.user.displayName,
+        avatarUrl: req.user.avatarUrl,
+      };
+    }
     res.json({
       configured: isGoogleAuthConfigured(),
       authenticated: req.isAuthenticated(),
-      user: req.user || null,
+      user: sanitizedUser,
     });
   });
 
@@ -62,16 +73,16 @@ export async function registerRoutes(
     "/auth/google/callback",
     (req, res, next) => {
       if (!isGoogleAuthConfigured()) {
-        return res.redirect("/?error=oauth_not_configured");
+        return res.redirect("/settings?error=oauth_not_configured");
       }
       next();
     },
     passport.authenticate("google", {
-      failureRedirect: "/?error=auth_failed",
+      failureRedirect: "/settings?error=auth_failed",
     }),
     (req, res) => {
-      // Successful authentication
-      res.redirect("/?auth=success");
+      // Successful authentication - redirect to settings page
+      res.redirect("/settings?auth=success");
     }
   );
 

@@ -1,7 +1,8 @@
 import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useLocation } from "wouter";
-import { ChevronLeft, User, Palette, Key, Cloud, Plug, Sun, Moon, Check, Upload, Download, AlertCircle } from "lucide-react";
+import { ChevronLeft, User, Palette, Key, Cloud, Plug, Sun, Moon, Check, Upload, Download, AlertCircle, Activity, LogOut } from "lucide-react";
+import { SiGoogle } from "react-icons/si";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -133,6 +134,57 @@ export default function Settings() {
   const { data: calendarStatus } = useQuery<{ connected: boolean }>({
     queryKey: ["/api/calendar/status"],
   });
+
+  // Google Fit auth status
+  interface AuthStatus {
+    configured: boolean;
+    authenticated: boolean;
+    user: {
+      id: string;
+      googleId: string;
+      email: string;
+      displayName: string | null;
+      avatarUrl: string | null;
+    } | null;
+  }
+  
+  const { data: authStatus, refetch: refetchAuth } = useQuery<AuthStatus>({
+    queryKey: ["/api/auth/status"],
+  });
+
+  const logout = useMutation({
+    mutationFn: async () => {
+      const response = await apiRequest("POST", "/auth/logout", {});
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/auth/status"] });
+      toast({
+        title: "已登出",
+        description: "你已成功登出 Google 帳戶",
+      });
+    },
+  });
+
+  // Handle auth success from URL params
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("auth") === "success") {
+      refetchAuth();
+      toast({
+        title: "登入成功",
+        description: "已連接 Google 帳戶，可以同步生物數據了！",
+      });
+      window.history.replaceState({}, "", "/settings");
+    } else if (params.get("error")) {
+      toast({
+        title: "登入失敗",
+        description: "無法連接 Google 帳戶，請稍後再試",
+        variant: "destructive",
+      });
+      window.history.replaceState({}, "", "/settings");
+    }
+  }, [refetchAuth, toast]);
 
   // Apply theme on initial load
   useEffect(() => {
@@ -358,6 +410,81 @@ export default function Settings() {
           </TabsContent>
 
           <TabsContent value="cloud" className="space-y-4">
+            {/* Google Fit Authentication */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Activity className="h-5 w-5 text-green-500" />
+                  生物數據同步
+                </CardTitle>
+                <CardDescription>
+                  連接 Google Fit 以同步你的健康數據（活動、睡眠、心率）
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {!authStatus?.configured ? (
+                  <div className="flex items-center gap-3 p-4 rounded-lg border border-yellow-500/30 bg-yellow-500/5">
+                    <AlertCircle className="h-5 w-5 text-yellow-500" />
+                    <p className="text-sm text-muted-foreground">
+                      Google OAuth 尚未設定，請先在環境變數中加入 GOOGLE_CLIENT_ID 和 GOOGLE_CLIENT_SECRET
+                    </p>
+                  </div>
+                ) : authStatus?.authenticated && authStatus.user ? (
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between p-4 rounded-lg border bg-green-500/5 border-green-500/30">
+                      <div className="flex items-center gap-3">
+                        {authStatus.user.avatarUrl ? (
+                          <img
+                            src={authStatus.user.avatarUrl}
+                            alt="Avatar"
+                            className="w-10 h-10 rounded-full"
+                          />
+                        ) : (
+                          <div className="w-10 h-10 rounded-full bg-green-500/10 flex items-center justify-center">
+                            <User className="h-5 w-5 text-green-500" />
+                          </div>
+                        )}
+                        <div>
+                          <p className="font-medium">{authStatus.user.displayName || authStatus.user.email}</p>
+                          <p className="text-sm text-muted-foreground">已連接 Google Fit</p>
+                        </div>
+                      </div>
+                      <Check className="h-5 w-5 text-green-500" />
+                    </div>
+                    <div className="flex gap-2">
+                      <Button
+                        className="flex-1 flex items-center gap-2"
+                        variant="outline"
+                        data-testid="button-sync-biodata"
+                      >
+                        <Activity className="h-4 w-4" />
+                        同步生物數據
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="icon"
+                        onClick={() => logout.mutate()}
+                        disabled={logout.isPending}
+                        data-testid="button-logout"
+                      >
+                        <LogOut className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
+                  <Button
+                    className="w-full flex items-center gap-2"
+                    onClick={() => window.location.href = "/auth/google"}
+                    data-testid="button-google-signin"
+                  >
+                    <SiGoogle className="h-4 w-4" />
+                    使用 Google 登入
+                  </Button>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Cloud Sync */}
             <Card>
               <CardHeader>
                 <CardTitle>雲端同步</CardTitle>
