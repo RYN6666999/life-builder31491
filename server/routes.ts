@@ -1,6 +1,5 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
-import passport from "passport";
 import { storage, initializeMonuments } from "./storage";
 import { chat, classifyIntent, type ChatMode } from "./gemini";
 import { insertTaskSchema, insertSessionSchema, insertUserSettingsSchema } from "@shared/schema";
@@ -17,7 +16,7 @@ import {
   listUpcomingEvents,
   deleteCalendarEvent
 } from "./google-calendar";
-import { isGoogleAuthConfigured, GOOGLE_FIT_SCOPES } from "./auth";
+import { setupReplitAuth } from "./replitAuth";
 
 export async function registerRoutes(
   httpServer: Server,
@@ -26,73 +25,32 @@ export async function registerRoutes(
   // Initialize monuments on startup
   await initializeMonuments();
 
-  // ============ GOOGLE AUTHENTICATION ============
+  // ============ REPLIT AUTHENTICATION ============
+  // Sets up /api/login, /api/callback, /api/logout, /api/auth/user
+  await setupReplitAuth(app);
   
-  // Check if Google Auth is configured
+  // Auth status endpoint for frontend
   app.get("/api/auth/status", (req, res) => {
-    // Sanitize user data - don't expose tokens to frontend
+    const user = req.user as any;
     let sanitizedUser = null;
-    if (req.user) {
+    
+    if (req.isAuthenticated() && user?.claims) {
       sanitizedUser = {
-        id: req.user.id,
-        googleId: req.user.googleId,
-        email: req.user.email,
-        displayName: req.user.displayName,
-        avatarUrl: req.user.avatarUrl,
+        id: user.claims.sub,
+        email: user.claims.email,
+        firstName: user.claims.first_name,
+        lastName: user.claims.last_name,
+        displayName: user.claims.first_name 
+          ? `${user.claims.first_name} ${user.claims.last_name || ''}`.trim()
+          : user.claims.email,
+        avatarUrl: user.claims.profile_image_url,
       };
     }
+    
     res.json({
-      configured: isGoogleAuthConfigured(),
+      configured: true,
       authenticated: req.isAuthenticated(),
       user: sanitizedUser,
-    });
-  });
-
-  // Get current user
-  app.get("/api/auth/me", (req, res) => {
-    if (!req.isAuthenticated()) {
-      return res.status(401).json({ error: "Not authenticated" });
-    }
-    res.json(req.user);
-  });
-
-  // Start Google OAuth flow
-  app.get("/auth/google", (req, res, next) => {
-    if (!isGoogleAuthConfigured()) {
-      return res.status(503).json({ error: "Google OAuth not configured" });
-    }
-    passport.authenticate("google", {
-      scope: GOOGLE_FIT_SCOPES,
-      accessType: "offline",
-      prompt: "consent", // Force consent to get refresh token
-    })(req, res, next);
-  });
-
-  // Google OAuth callback
-  app.get(
-    "/auth/google/callback",
-    (req, res, next) => {
-      if (!isGoogleAuthConfigured()) {
-        return res.redirect("/settings?error=oauth_not_configured");
-      }
-      next();
-    },
-    passport.authenticate("google", {
-      failureRedirect: "/settings?error=auth_failed",
-    }),
-    (req, res) => {
-      // Successful authentication - redirect to settings page
-      res.redirect("/settings?auth=success");
-    }
-  );
-
-  // Logout
-  app.post("/auth/logout", (req, res) => {
-    req.logout((err) => {
-      if (err) {
-        return res.status(500).json({ error: "Logout failed" });
-      }
-      res.json({ success: true });
     });
   });
 
