@@ -240,3 +240,104 @@ The app automatically selects the appropriate database driver:
 - Vercel: Uses standard `pg` driver for Supabase compatibility
 
 Configured via `VERCEL` environment variable detection in `server/db.ts`.
+
+---
+
+## Vercel 部署除錯歷史 (2024-12-02)
+
+### 問題描述
+Vercel 部署持續失敗，錯誤訊息為 PostCSS/Tailwind 相關的 "content option is missing or empty"。本地 Replit 建置正常（2576 modules transformed），但 Vercel 只處理 3 modules。
+
+### 根本原因分析
+
+經過多次排查，發現**多個問題同時存在**：
+
+#### 1. Git Push 問題（最關鍵）
+- **症狀**：本地修復完成，但 Vercel 仍使用舊代碼
+- **原因**：有 5+ 個 commits 沒有 push 到 GitHub
+- **驗證**：`git log` 顯示 `origin/main` 落後於 `HEAD`
+- **解決**：執行 `git push`
+
+#### 2. Vercel Root Directory 設定錯誤
+- **症狀**：Vercel 找不到 `package.json`
+- **原因**：Root Directory 被設成 `client`，但 `client/` 沒有自己的 `package.json`
+- **解決**：清空 Root Directory（使用專案根目錄）
+
+#### 3. PostCSS 配置衝突
+- **症狀**：Vite 找不到正確的 Tailwind 配置
+- **原因**：根目錄和 `client/` 都有 PostCSS 配置，路徑指向混亂
+- **解決**：
+  - 根目錄 `postcss.config.cjs` 使用絕對路徑指向 `client/tailwind.config.cjs`
+  - `client/postcss.config.cjs` 使用相對路徑 `./tailwind.config.cjs`
+
+#### 4. Tailwind content 路徑問題
+- **症狀**：CSS 沒有包含任何 Tailwind 類別
+- **原因**：使用 `path.resolve()` 包裝 glob 模式會破壞 glob 解析
+- **解決**：使用純字串相對路徑：`"./src/**/*.{js,jsx,ts,tsx}"`
+
+### 最終正確配置
+
+**vercel.json**：
+```json
+{
+  "version": 2,
+  "installCommand": "npm ci --include=dev",
+  "buildCommand": "npm run build",
+  "outputDirectory": "dist/public"
+}
+```
+
+**Vercel Dashboard 設定**：
+| 設定 | 值 |
+|------|-----|
+| Root Directory | （留空） |
+| Framework Preset | Other 或 Vite |
+| Build Command | npm run build |
+| Output Directory | dist/public |
+| Install Command | npm ci --include=dev |
+
+**postcss.config.cjs（根目錄）**：
+```javascript
+const path = require("path");
+module.exports = {
+  plugins: {
+    tailwindcss: {
+      config: path.join(__dirname, "client", "tailwind.config.cjs"),
+    },
+    autoprefixer: {},
+  },
+};
+```
+
+**client/tailwind.config.cjs（content 部分）**：
+```javascript
+content: [
+  "./index.html",
+  "./src/**/*.{js,jsx,ts,tsx}",
+],
+```
+
+### 除錯經驗教訓
+
+1. **先確認 Git 狀態**：永遠先執行 `git status` 和 `git log --oneline -5` 確認本地與遠端同步
+2. **理解專案結構**：Monorepo 結構需要正確設定 Root Directory
+3. **不要混用路徑處理**：Tailwind content 路徑用純字串，PostCSS config 路徑用 `path.join()`
+4. **清除快取**：Vercel Redeploy 時不要勾選 "Use existing Build Cache"
+5. **一次只改一個變數**：方便定位問題
+
+### 關鍵檢查命令
+
+```bash
+# 確認 Git 狀態
+git status
+git log --oneline -5
+
+# 確認本地建置
+npm run build
+
+# 確認輸出目錄
+ls -la dist/public/
+
+# 確認 CSS 大小（應該 ~12-15KB）
+ls -lh dist/public/assets/*.css
+```
