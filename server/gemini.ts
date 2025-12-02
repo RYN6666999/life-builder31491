@@ -402,6 +402,66 @@ export async function chat(
   }
 }
 
+// Streaming chat for real-time response display
+export async function* chatStream(
+  mode: ChatMode,
+  userMessage: string,
+  context?: {
+    monumentSlug?: string;
+    currentTask?: string;
+    sedonaStep?: number;
+    currentTasks?: TaskItem[];
+    conversationHistory?: Array<{ role: string; content: string }>;
+    healthContext?: string;
+  }
+): AsyncGenerator<string, void, unknown> {
+  try {
+    const systemPrompt = getSystemPrompt(mode);
+    
+    let contextInfo = "";
+    if (context?.monumentSlug) {
+      contextInfo += `\n當前領域：${context.monumentSlug}`;
+    }
+    if (context?.currentTask) {
+      contextInfo += `\n當前任務：${context.currentTask}`;
+    }
+    if (context?.sedonaStep) {
+      contextInfo += `\n當前釋放步驟：${context.sedonaStep}`;
+    }
+    if (context?.currentTasks && context.currentTasks.length > 0) {
+      contextInfo += `\n當前任務清單：${JSON.stringify(context.currentTasks)}`;
+    }
+    if (context?.healthContext) {
+      contextInfo += `\n\n=== 大師的健康狀態 ===\n${context.healthContext}`;
+    }
+    
+    let historyContext = "";
+    if (context?.conversationHistory && context.conversationHistory.length > 0) {
+      const recentHistory = context.conversationHistory.slice(-6);
+      historyContext = "\n\n對話歷史：\n" + recentHistory.map(m => 
+        `${m.role === 'user' ? '用戶' : 'AI'}：${m.content}`
+      ).join('\n');
+    }
+
+    const textPrompt = `${systemPrompt}${contextInfo}${historyContext}\n\n用戶訊息：${userMessage}\n\n請以 JSON 格式回應。`;
+
+    const stream = await ai.models.generateContentStream({
+      model: "gemini-2.5-flash",
+      contents: [{ role: "user" as const, parts: [{ text: textPrompt }] }],
+    });
+
+    for await (const chunk of stream) {
+      const text = chunk.text || "";
+      if (text) {
+        yield text;
+      }
+    }
+  } catch (error) {
+    console.error("Gemini streaming error:", error);
+    yield "抱歉，我暫時無法回應。請稍後再試。";
+  }
+}
+
 // Intent classification to determine which mode to use
 export async function classifyIntent(
   message: string

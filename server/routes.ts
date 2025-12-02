@@ -1,7 +1,7 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage, initializeMonuments } from "./storage";
-import { chat, classifyIntent, type ChatMode } from "./gemini";
+import { chat, chatStream, classifyIntent, type ChatMode } from "./gemini";
 import { GoogleGenAI } from "@google/genai";
 
 // Initialize Gemini AI client for voice mode
@@ -607,6 +607,111 @@ export async function registerRoutes(
     } catch (error) {
       console.error("Error in chat:", error);
       res.status(500).json({ error: "Failed to process chat" });
+    }
+  });
+
+  // Streaming chat endpoint for real-time AI responses
+  app.post("/api/chat/stream", async (req, res) => {
+    try {
+      const { sessionId, message } = req.body;
+      
+      if (!sessionId || !message) {
+        return res.status(400).json({ error: "sessionId and message are required" });
+      }
+
+      const session = await storage.getSession(sessionId);
+      if (!session) {
+        return res.status(404).json({ error: "Session not found" });
+      }
+
+      // Set up SSE headers
+      res.setHeader("Content-Type", "text/event-stream");
+      res.setHeader("Cache-Control", "no-cache");
+      res.setHeader("Connection", "keep-alive");
+      res.setHeader("X-Accel-Buffering", "no");
+
+      // Determine chat mode
+      let mode: ChatMode = "collaborative";
+      let context: {
+        monumentSlug?: string;
+        currentTask?: string;
+        sedonaStep?: number;
+        currentTasks?: Array<{ content: string; category: "E" | "A" | "P" | "X"; xpValue: number }>;
+        conversationHistory?: Array<{ role: string; content: string }>;
+        healthContext?: string;
+      } = {};
+
+      const sessionTasks = await storage.getTasksBySession(sessionId);
+      if (sessionTasks.length > 0) {
+        context.currentTasks = sessionTasks.map(t => ({
+          content: t.content,
+          category: (t.category || "A") as "E" | "A" | "P" | "X",
+          xpValue: t.xpValue,
+        }));
+      }
+
+      if (session.messages && Array.isArray(session.messages)) {
+        context.conversationHistory = (session.messages as any[]).slice(-6);
+      }
+
+      if (session.flowType === "mood") {
+        mode = "sedona";
+        const currentStep = (session.messages as any[])?.filter(
+          (m) => m.role === "assistant"
+        ).length || 1;
+        context.sedonaStep = Math.min(currentStep, 3);
+      } else {
+        const intent = await classifyIntent(message);
+        if (intent.mode === "breakdown") {
+          mode = "breakdown";
+        } else if (intent.isEmotional) {
+          mode = "sedona";
+        }
+        
+        if (session.selectedMonumentId) {
+          const monument = await storage.getMonument(session.selectedMonumentId);
+          if (monument) {
+            context.monumentSlug = monument.slug;
+          }
+        }
+      }
+
+      // Send thinking indicator
+      res.write(`data: ${JSON.stringify({ type: "thinking" })}\n\n`);
+
+      // Stream response
+      let fullContent = "";
+      for await (const chunk of chatStream(mode, message, context)) {
+        fullContent += chunk;
+        res.write(`data: ${JSON.stringify({ type: "chunk", content: chunk })}\n\n`);
+      }
+
+      // Parse the complete response to extract structured data
+      try {
+        let cleanedText = fullContent.trim();
+        if (cleanedText.startsWith("```json")) {
+          cleanedText = cleanedText.slice(7);
+        }
+        if (cleanedText.startsWith("```")) {
+          cleanedText = cleanedText.slice(3);
+        }
+        if (cleanedText.endsWith("```")) {
+          cleanedText = cleanedText.slice(0, -3);
+        }
+        cleanedText = cleanedText.trim();
+        
+        const parsed = JSON.parse(cleanedText);
+        res.write(`data: ${JSON.stringify({ type: "complete", data: parsed })}\n\n`);
+      } catch {
+        res.write(`data: ${JSON.stringify({ type: "complete", data: { content: fullContent } })}\n\n`);
+      }
+
+      res.write(`data: ${JSON.stringify({ type: "done" })}\n\n`);
+      res.end();
+    } catch (error) {
+      console.error("Error in streaming chat:", error);
+      res.write(`data: ${JSON.stringify({ type: "error", message: "Failed to process streaming chat" })}\n\n`);
+      res.end();
     }
   });
 

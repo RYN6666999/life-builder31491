@@ -60,6 +60,7 @@ interface CollaborativeChatProps {
   sessionId: string;
   messages: Message[];
   isLoading: boolean;
+  streamingContent?: string;
   onSendMessage: (message: string, images?: ImageAttachment[]) => void;
   onSelectOption: (option: string) => void;
   onBack: () => void;
@@ -75,6 +76,19 @@ function TypingIndicator() {
         <span className="w-2 h-2 bg-muted-foreground rounded-full animate-bounce" style={{ animationDelay: "0ms" }} />
         <span className="w-2 h-2 bg-muted-foreground rounded-full animate-bounce" style={{ animationDelay: "150ms" }} />
         <span className="w-2 h-2 bg-muted-foreground rounded-full animate-bounce" style={{ animationDelay: "300ms" }} />
+      </div>
+    </div>
+  );
+}
+
+function StreamingIndicator({ content }: { content: string }) {
+  return (
+    <div className="flex flex-col items-start">
+      <div className="rounded-2xl rounded-bl-md bg-card border border-border px-4 py-3 max-w-[85%]">
+        <div className="text-sm whitespace-pre-wrap">
+          {content}
+          <span className="inline-block w-2 h-4 bg-primary/60 animate-pulse ml-0.5" />
+        </div>
       </div>
     </div>
   );
@@ -333,6 +347,7 @@ export function CollaborativeChat({
   sessionId,
   messages,
   isLoading,
+  streamingContent,
   onSendMessage,
   onSelectOption,
   onBack,
@@ -611,11 +626,15 @@ export function CollaborativeChat({
             />
           ))}
           {isLoading && (
-            <div className="flex items-start">
-              <div className="bg-card border border-border rounded-2xl rounded-bl-md">
-                <TypingIndicator />
+            streamingContent ? (
+              <StreamingIndicator content={streamingContent} />
+            ) : (
+              <div className="flex items-start">
+                <div className="bg-card border border-border rounded-2xl rounded-bl-md">
+                  <TypingIndicator />
+                </div>
               </div>
-            </div>
+            )
           )}
         </div>
       </ScrollArea>

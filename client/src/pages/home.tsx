@@ -57,6 +57,7 @@ export default function Home() {
   // Chat state
   const [messages, setMessages] = useState<Message[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [streamingContent, setStreamingContent] = useState<string>("");
   
   // Sedona state
   const [sedonaMessages, setSedonaMessages] = useState<SedonaMessage[]>([]);
@@ -278,7 +279,7 @@ export default function Home() {
     }
   }, [createSession, toast]);
 
-  // Handle chat message
+  // Handle chat message with streaming support
   const handleSendMessage = useCallback(async (content: string, images?: ImageAttachment[]) => {
     if (!sessionId) return;
     
@@ -290,49 +291,176 @@ export default function Home() {
     };
     setMessages((prev) => [...prev, userMessage]);
     setIsLoading(true);
+    setStreamingContent("");
 
+    // Use streaming for text-only messages, fallback for images
+    if (images && images.length > 0) {
+      // Fallback to regular endpoint for images
+      try {
+        const response = await sendMessage.mutateAsync({ 
+          sessionId, 
+          message: content,
+          images,
+        });
+        
+        const assistantMessage: Message = {
+          id: (Date.now() + 1).toString(),
+          role: "assistant",
+          content: response.content,
+          options: response.options,
+          optionsNote: response.optionsNote,
+          toolCalls: response.toolCalls,
+        };
+        setMessages((prev) => [...prev, assistantMessage]);
+        
+        // Refresh tasks if any were created or modified
+        const taskOperations = ["create_smart_task", "create_task_list", "add_tasks", "remove_tasks", "breakdown_task", "complete_tasks", "recursive_breakdown"];
+        if (response.toolCalls?.some((t: { name: string }) => taskOperations.includes(t.name))) {
+          queryClient.invalidateQueries({ queryKey: ["/api/tasks"] });
+          queryClient.invalidateQueries({ queryKey: ['/api/sessions', sessionId, 'tasks'] });
+        }
+        
+        // Handle UI mode change
+        if (response.uiMode === "sedona") {
+          setFlowStep("sedona");
+          setSedonaMessages([{
+            id: "1",
+            role: "assistant",
+            content: "我感受到你可能有一些情緒阻力。讓我們先來處理這個。\n\n此刻你心中有什麼感受？",
+            step: 1,
+          }]);
+        }
+      } catch {
+        toast({
+          title: "發送失敗",
+          description: "請稍後再試",
+          variant: "destructive",
+        });
+      } finally {
+        setIsLoading(false);
+        setStreamingContent("");
+      }
+      return;
+    }
+
+    // Use streaming for text-only messages
+    let reader: ReadableStreamDefaultReader<Uint8Array> | null = null;
     try {
-      const response = await sendMessage.mutateAsync({ 
-        sessionId, 
-        message: content,
-        images,
+      const response = await fetch("/api/chat/stream", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sessionId, message: content }),
       });
-      
+
+      if (!response.ok) {
+        throw new Error("Streaming failed");
+      }
+
+      reader = response.body?.getReader() ?? null;
+      if (!reader) throw new Error("No reader");
+
+      const decoder = new TextDecoder();
+      let streamedText = "";
+      let finalData: { content?: string; options?: string[]; optionsNote?: string; toolCalls?: any[] } | null = null;
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        const chunk = decoder.decode(value, { stream: true });
+        const lines = chunk.split("\n");
+
+        for (const line of lines) {
+          if (line.startsWith("data: ")) {
+            try {
+              const data = JSON.parse(line.slice(6));
+              if (data.type === "chunk") {
+                streamedText += data.content;
+                setStreamingContent(streamedText);
+              } else if (data.type === "complete") {
+                finalData = data.data;
+              }
+            } catch {
+              // Ignore parse errors from partial chunks
+            }
+          }
+        }
+      }
+
+      // Release the reader lock after successful reading
+      reader.releaseLock();
+
+      // Clear streaming content immediately before adding message
+      setStreamingContent("");
+
+      // Add the final message
       const assistantMessage: Message = {
         id: (Date.now() + 1).toString(),
         role: "assistant",
-        content: response.content,
-        options: response.options,
-        optionsNote: response.optionsNote,
-        toolCalls: response.toolCalls,
+        content: finalData?.content || streamedText,
+        options: finalData?.options,
+        optionsNote: finalData?.optionsNote,
+        toolCalls: finalData?.toolCalls,
       };
       setMessages((prev) => [...prev, assistantMessage]);
-      
-      // Refresh tasks if any were created or modified
-      const taskOperations = ["create_smart_task", "create_task_list", "add_tasks", "remove_tasks", "breakdown_task", "complete_tasks", "recursive_breakdown"];
-      if (response.toolCalls?.some((t: { name: string }) => taskOperations.includes(t.name))) {
-        queryClient.invalidateQueries({ queryKey: ["/api/tasks"] });
-        queryClient.invalidateQueries({ queryKey: ['/api/sessions', sessionId, 'tasks'] });
+      setIsLoading(false);
+
+      // If we got structured data, process it normally
+      if (finalData?.toolCalls) {
+        const taskOperations = ["create_smart_task", "create_task_list", "add_tasks", "remove_tasks", "breakdown_task", "complete_tasks", "recursive_breakdown"];
+        if (finalData.toolCalls.some((t: { name: string }) => taskOperations.includes(t.name))) {
+          queryClient.invalidateQueries({ queryKey: ["/api/tasks"] });
+          queryClient.invalidateQueries({ queryKey: ['/api/sessions', sessionId, 'tasks'] });
+        }
       }
-      
-      // Handle UI mode change
-      if (response.uiMode === "sedona") {
-        setFlowStep("sedona");
-        setSedonaMessages([{
-          id: "1",
+      return;
+    } catch {
+      // Release reader lock if it was acquired before the error
+      if (reader) {
+        try { reader.releaseLock(); } catch { /* ignore */ }
+      }
+      // Fallback to non-streaming if streaming fails
+      try {
+        const response = await sendMessage.mutateAsync({ 
+          sessionId, 
+          message: content,
+        });
+        
+        const assistantMessage: Message = {
+          id: (Date.now() + 1).toString(),
           role: "assistant",
-          content: "我感受到你可能有一些情緒阻力。讓我們先來處理這個。\n\n此刻你心中有什麼感受？",
-          step: 1,
-        }]);
+          content: response.content,
+          options: response.options,
+          optionsNote: response.optionsNote,
+          toolCalls: response.toolCalls,
+        };
+        setMessages((prev) => [...prev, assistantMessage]);
+        
+        const taskOperations = ["create_smart_task", "create_task_list", "add_tasks", "remove_tasks", "breakdown_task", "complete_tasks", "recursive_breakdown"];
+        if (response.toolCalls?.some((t: { name: string }) => taskOperations.includes(t.name))) {
+          queryClient.invalidateQueries({ queryKey: ["/api/tasks"] });
+          queryClient.invalidateQueries({ queryKey: ['/api/sessions', sessionId, 'tasks'] });
+        }
+        
+        if (response.uiMode === "sedona") {
+          setFlowStep("sedona");
+          setSedonaMessages([{
+            id: "1",
+            role: "assistant",
+            content: "我感受到你可能有一些情緒阻力。讓我們先來處理這個。\n\n此刻你心中有什麼感受？",
+            step: 1,
+          }]);
+        }
+      } catch {
+        toast({
+          title: "發送失敗",
+          description: "請稍後再試",
+          variant: "destructive",
+        });
       }
-    } catch (error) {
-      toast({
-        title: "發送失敗",
-        description: "請稍後再試",
-        variant: "destructive",
-      });
     } finally {
       setIsLoading(false);
+      setStreamingContent("");
     }
   }, [sessionId, sendMessage, toast]);
 
@@ -611,6 +739,7 @@ export default function Home() {
             sessionId={sessionId}
             messages={messages}
             isLoading={isLoading}
+            streamingContent={streamingContent}
             onSendMessage={handleSendMessage}
             onSelectOption={handleSelectOption}
             onBack={handleBack}
