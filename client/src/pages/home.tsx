@@ -464,13 +464,21 @@ export default function Home() {
     setSwitchReason(undefined);
   }, []);
 
-  // Handle tab change
+  // Handle tab change - reset to home state when clicking home tab
   const handleTabChange = useCallback((tab: NavTab) => {
     setActiveTab(tab);
     if (tab === "home") {
+      // Reset everything to initial state-check screen
       setFlowStep("state-check");
       setSelectedMonument(null);
       setMessages([]);
+      setSedonaMessages([]);
+      setSedonaStep(1);
+      setSedonaComplete(false);
+      setSessionId(null);
+      setFlowType(null);
+      setActiveProjectId(null);
+      clearConversation();
     }
   }, []);
 

@@ -65,12 +65,22 @@ export const tasks = pgTable("tasks", {
   dueDate: timestamp("due_date"), // For calendar view scheduling
   dueTime: text("due_time"), // Time part for calendar (HH:MM format)
   duration: integer("duration"), // Duration in minutes for calendar blocks
+  estimatedAt: timestamp("estimated_at"), // Estimated completion date/time
+  weightPercent: integer("weight_percent").default(100), // % weight within parent (subtasks sum to 100%)
+  isKeyAction: integer("is_key_action").default(0), // 80/20 key action flag (1 = key action)
   metadata: jsonb("metadata").$type<{
     emotionTags?: string[];
     context?: string;
     agentReasoning?: string;
     sedonaStep?: number;
     proposedBy?: "ai" | "user";
+    smartCriteria?: {
+      specific?: string;
+      measurable?: string;
+      achievable?: string;
+      relevant?: string;
+      timeBound?: string;
+    };
   }>(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   completedAt: timestamp("completed_at"),
