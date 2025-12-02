@@ -62,6 +62,9 @@ export const tasks = pgTable("tasks", {
   xpValue: integer("xp_value").notNull().default(10),
   sortOrder: integer("sort_order").notNull().default(0), // For ordering tasks
   isDraft: integer("is_draft").notNull().default(0), // 0 = confirmed, 1 = draft/proposed by AI
+  dueDate: timestamp("due_date"), // For calendar view scheduling
+  dueTime: text("due_time"), // Time part for calendar (HH:MM format)
+  duration: integer("duration"), // Duration in minutes for calendar blocks
   metadata: jsonb("metadata").$type<{
     emotionTags?: string[];
     context?: string;
@@ -192,6 +195,9 @@ export type InsertGoogleUser = z.infer<typeof insertGoogleUserSchema>;
 // AI Persona enum
 export const aiPersonaEnum = pgEnum("ai_persona", ["spiritual", "coach", "pm", "custom"]);
 
+// View Mode enum - for task display modes
+export const viewModeEnum = pgEnum("view_mode", ["list", "calendar", "tree"]);
+
 // User Settings table
 export const userSettings = pgTable("user_settings", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -199,6 +205,7 @@ export const userSettings = pgTable("user_settings", {
   aiPersona: aiPersonaEnum("ai_persona").notNull().default("spiritual"),
   customPersonaPrompt: text("custom_persona_prompt"),
   theme: text("theme").notNull().default("dark"),
+  viewMode: viewModeEnum("view_mode").notNull().default("list"),
   googleDriveConnected: integer("google_drive_connected").notNull().default(0),
   googleCalendarConnected: integer("google_calendar_connected").notNull().default(0),
   webSearchEnabled: integer("web_search_enabled").notNull().default(0),
@@ -224,6 +231,28 @@ export const insertUserSettingsSchema = createInsertSchema(userSettings).omit({
 
 export type UserSettings = typeof userSettings.$inferSelect;
 export type InsertUserSettings = z.infer<typeof insertUserSettingsSchema>;
+
+// View Mode History - track when users switch between view modes
+export const viewModeHistory = pgTable("view_mode_history", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id"),
+  fromMode: viewModeEnum("from_mode"),
+  toMode: viewModeEnum("to_mode").notNull(),
+  metadata: jsonb("metadata").$type<{
+    monumentId?: string;
+    reason?: string;
+    triggeredBy?: "user" | "ai";
+  }>(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const insertViewModeHistorySchema = createInsertSchema(viewModeHistory).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type ViewModeHistory = typeof viewModeHistory.$inferSelect;
+export type InsertViewModeHistory = z.infer<typeof insertViewModeHistorySchema>;
 
 // Saved Locations table - for spatial memory and navigation
 export const savedLocations = pgTable("saved_locations", {

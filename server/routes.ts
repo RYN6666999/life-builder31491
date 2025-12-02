@@ -736,6 +736,46 @@ export async function registerRoutes(
     }
   });
 
+  // ============ VIEW MODE HISTORY ============
+  
+  // Get view mode history
+  app.get("/api/view-mode-history", async (req, res) => {
+    try {
+      const user = req.user as any;
+      const userId = user?.claims?.sub || undefined;
+      const limit = parseInt(req.query.limit as string) || 20;
+      const history = await storage.getViewModeHistory(userId, limit);
+      res.json(history);
+    } catch (error) {
+      console.error("Error fetching view mode history:", error);
+      res.status(500).json({ error: "Failed to fetch view mode history" });
+    }
+  });
+
+  // Record view mode change
+  app.post("/api/view-mode-history", async (req, res) => {
+    try {
+      const user = req.user as any;
+      const userId = user?.claims?.sub || undefined;
+      const { fromMode, toMode, metadata } = req.body;
+      
+      if (!toMode) {
+        return res.status(400).json({ error: "toMode is required" });
+      }
+      
+      const record = await storage.createViewModeHistory({
+        userId,
+        fromMode,
+        toMode,
+        metadata,
+      });
+      res.status(201).json(record);
+    } catch (error) {
+      console.error("Error recording view mode change:", error);
+      res.status(500).json({ error: "Failed to record view mode change" });
+    }
+  });
+
   // ============ GOOGLE DRIVE CLOUD SYNC ============
 
   // Check Google Drive connection status

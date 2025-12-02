@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useLocation } from "wouter";
-import { ChevronLeft, User, Palette, Key, Cloud, Plug, Sun, Moon, Check, Upload, Download, AlertCircle, Activity, LogOut, FileUp, Heart, Footprints, Moon as MoonIcon, Flame, Loader2 } from "lucide-react";
+import { ChevronLeft, User, Palette, Key, Cloud, Plug, Sun, Moon, Check, Upload, Download, AlertCircle, Activity, LogOut, FileUp, Heart, Footprints, Moon as MoonIcon, Flame, Loader2, LayoutGrid, List, Calendar, FolderTree, History } from "lucide-react";
 import { SiGoogle, SiApple } from "react-icons/si";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -257,6 +257,90 @@ const AI_PERSONAS = [
   },
 ];
 
+interface ViewModeHistoryRecord {
+  id: string;
+  userId?: string;
+  fromMode?: string;
+  toMode: string;
+  createdAt: string;
+  metadata?: Record<string, any>;
+}
+
+const VIEW_MODE_NAMES: Record<string, string> = {
+  list: "清單",
+  calendar: "行事曆",
+  tree: "樹狀",
+};
+
+const VIEW_MODE_ICONS: Record<string, typeof List> = {
+  list: List,
+  calendar: Calendar,
+  tree: FolderTree,
+};
+
+function ViewModeHistorySection() {
+  const { data: history, isLoading } = useQuery<ViewModeHistoryRecord[]>({
+    queryKey: ["/api/view-mode-history"],
+  });
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center py-8">
+        <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
+  if (!history || history.length === 0) {
+    return (
+      <div className="text-center py-6 text-muted-foreground text-sm">
+        還沒有切換記錄
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-2">
+      {history.slice(0, 5).map((record) => {
+        const ToIcon = VIEW_MODE_ICONS[record.toMode] || List;
+        const FromIcon = record.fromMode ? VIEW_MODE_ICONS[record.fromMode] || List : null;
+        
+        return (
+          <div
+            key={record.id}
+            className="flex items-center gap-3 p-2 rounded-lg bg-muted/30"
+            data-testid={`history-record-${record.id}`}
+          >
+            <div className="flex items-center gap-2 flex-1">
+              {FromIcon && (
+                <>
+                  <FromIcon className="h-4 w-4 text-muted-foreground" />
+                  <span className="text-sm text-muted-foreground">
+                    {VIEW_MODE_NAMES[record.fromMode!] || record.fromMode}
+                  </span>
+                  <span className="text-muted-foreground">→</span>
+                </>
+              )}
+              <ToIcon className="h-4 w-4" />
+              <span className="text-sm font-medium">
+                {VIEW_MODE_NAMES[record.toMode] || record.toMode}
+              </span>
+            </div>
+            <span className="text-xs text-muted-foreground">
+              {new Date(record.createdAt).toLocaleString("zh-TW", {
+                month: "short",
+                day: "numeric",
+                hour: "2-digit",
+                minute: "2-digit",
+              })}
+            </span>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 export default function Settings() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
@@ -264,6 +348,16 @@ export default function Settings() {
 
   const { data: settings, isLoading } = useQuery<UserSettings>({
     queryKey: ["/api/settings"],
+  });
+
+  const recordViewModeHistory = useMutation({
+    mutationFn: async (data: { fromMode?: string; toMode: string }) => {
+      const response = await apiRequest("POST", "/api/view-mode-history", data);
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/view-mode-history"] });
+    },
   });
 
   const updateSettings = useMutation({
@@ -274,6 +368,14 @@ export default function Settings() {
     onMutate: async (updates) => {
       await queryClient.cancelQueries({ queryKey: ["/api/settings"] });
       const previousSettings = queryClient.getQueryData<UserSettings>(["/api/settings"]);
+      
+      if (updates.viewMode && previousSettings?.viewMode !== updates.viewMode) {
+        recordViewModeHistory.mutate({
+          fromMode: previousSettings?.viewMode || "list",
+          toMode: updates.viewMode,
+        });
+      }
+      
       queryClient.setQueryData<UserSettings>(["/api/settings"], (old) => {
         if (!old) return old;
         return { ...old, ...updates };
@@ -440,9 +542,12 @@ export default function Settings() {
 
       <main className="max-w-lg mx-auto p-4 pb-20">
         <Tabs defaultValue="profile" className="space-y-6">
-          <TabsList className="grid grid-cols-5 w-full">
+          <TabsList className="grid grid-cols-6 w-full">
             <TabsTrigger value="profile" data-testid="tab-profile">
               <User className="h-4 w-4" />
+            </TabsTrigger>
+            <TabsTrigger value="view" data-testid="tab-view">
+              <LayoutGrid className="h-4 w-4" />
             </TabsTrigger>
             <TabsTrigger value="theme" data-testid="tab-theme">
               <Palette className="h-4 w-4" />
@@ -522,6 +627,94 @@ export default function Settings() {
                     />
                   </div>
                 )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="view" className="space-y-4">
+            <Card>
+              <CardHeader>
+                <CardTitle>檢視模式</CardTitle>
+                <CardDescription>選擇任務的顯示方式</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                <div className="grid gap-3">
+                  <button
+                    className={`flex items-center gap-4 p-4 rounded-lg border-2 transition-all text-left ${
+                      settings?.viewMode === "list" || !settings?.viewMode
+                        ? "border-primary bg-primary/10"
+                        : "border-border hover-elevate"
+                    }`}
+                    onClick={() => updateSettings.mutate({ viewMode: "list" as any })}
+                    data-testid="button-view-list"
+                  >
+                    <div className="w-10 h-10 rounded-full bg-blue-500/20 flex items-center justify-center shrink-0">
+                      <List className="h-5 w-5 text-blue-500" />
+                    </div>
+                    <div className="flex-1">
+                      <div className="font-medium">清單模式</div>
+                      <div className="text-sm text-muted-foreground">傳統任務清單，簡潔直觀</div>
+                    </div>
+                    {(settings?.viewMode === "list" || !settings?.viewMode) && (
+                      <Check className="h-5 w-5 text-primary shrink-0" />
+                    )}
+                  </button>
+                  
+                  <button
+                    className={`flex items-center gap-4 p-4 rounded-lg border-2 transition-all text-left ${
+                      settings?.viewMode === "calendar"
+                        ? "border-primary bg-primary/10"
+                        : "border-border hover-elevate"
+                    }`}
+                    onClick={() => updateSettings.mutate({ viewMode: "calendar" as any })}
+                    data-testid="button-view-calendar"
+                  >
+                    <div className="w-10 h-10 rounded-full bg-emerald-500/20 flex items-center justify-center shrink-0">
+                      <Calendar className="h-5 w-5 text-emerald-500" />
+                    </div>
+                    <div className="flex-1">
+                      <div className="font-medium">行事曆模式</div>
+                      <div className="text-sm text-muted-foreground">週視圖時間軸，直接排程任務</div>
+                    </div>
+                    {settings?.viewMode === "calendar" && (
+                      <Check className="h-5 w-5 text-primary shrink-0" />
+                    )}
+                  </button>
+                  
+                  <button
+                    className={`flex items-center gap-4 p-4 rounded-lg border-2 transition-all text-left ${
+                      settings?.viewMode === "tree"
+                        ? "border-primary bg-primary/10"
+                        : "border-border hover-elevate"
+                    }`}
+                    onClick={() => updateSettings.mutate({ viewMode: "tree" as any })}
+                    data-testid="button-view-tree"
+                  >
+                    <div className="w-10 h-10 rounded-full bg-purple-500/20 flex items-center justify-center shrink-0">
+                      <FolderTree className="h-5 w-5 text-purple-500" />
+                    </div>
+                    <div className="flex-1">
+                      <div className="font-medium">樹狀模式</div>
+                      <div className="text-sm text-muted-foreground">階層式結構，展現任務關係</div>
+                    </div>
+                    {settings?.viewMode === "tree" && (
+                      <Check className="h-5 w-5 text-primary shrink-0" />
+                    )}
+                  </button>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <History className="h-5 w-5" />
+                  切換歷史
+                </CardTitle>
+                <CardDescription>最近的檢視模式切換記錄</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <ViewModeHistorySection />
               </CardContent>
             </Card>
           </TabsContent>

@@ -2,9 +2,7 @@
 
 ## Overview
 
-LB_LifeBuilder is a gamified life goal management application that treats personal development as an "Earth Game." The app transforms the PDCA (Plan-Do-Check-Act) cycle into an engaging experience where users build six life "monuments" (Career, Wealth, Emotion, Family, Health, Experience) through completing tasks and processing emotions. The core philosophy treats "emotion" and "action" as convertible energies—both inner work (emotional processing) and outer work (task completion) contribute to life progress.
-
-The application uses AI as a "Spirit Guide" that helps users convert vague intentions into concrete, SMART actions through a conversational interface. It implements a unique "Sedona Method" for emotional processing and features recursive task breakdown to handle overwhelming goals.
+LB_LifeBuilder is a gamified mobile PWA designed to transform personal development into an engaging "Earth Game." It helps users manage life goals, process emotions, and build six life "monuments" (Career, Wealth, Emotion, Family, Health, Experience) by gamifying the PDCA cycle. The application utilizes AI as a "Spirit Guide" to convert vague intentions into concrete, SMART actions and incorporates a "Sedona Method" for emotional processing. Its core philosophy treats emotional processing and task completion as convertible energies contributing to overall life progress.
 
 ## User Preferences
 
@@ -12,332 +10,71 @@ Preferred communication style: Simple, everyday language.
 
 ## System Architecture
 
-### Frontend Architecture
+### Frontend
 
-**Framework**: React 18 with TypeScript using Vite as the build tool. The application is designed as a mobile-first Progressive Web App (PWA) with a focus on native app feel and offline capabilities.
+- **Framework**: React 18 with TypeScript and Vite. Mobile-first PWA with offline capabilities.
+- **Component Library**: shadcn/ui (Radix UI + Tailwind CSS) for accessible, customizable components.
+- **State Management**: TanStack Query for server state; React hooks for local UI state.
+- **Routing**: Wouter for lightweight client-side routing.
+- **Design System**: Dark mode with glowing accents, mobile-optimized typography, haptic feedback (Web Vibration API), progressive disclosure, and `canvas-confetti` for celebrations.
+- **Key Design Decisions**: Max viewport `512px`, 44px touch targets, safe area insets, streaming AI responses.
 
-**Component Library**: shadcn/ui built on Radix UI primitives with Tailwind CSS for styling. This choice provides accessible, customizable components with a consistent design system.
+### Backend
 
-**State Management**: TanStack Query (React Query) handles server state management, providing caching, background updates, and optimistic UI updates. Local UI state is managed with React hooks.
-
-**Routing**: Wouter for lightweight client-side routing, chosen for its minimal footprint suitable for mobile PWA.
-
-**Design System**:
-- Dark mode primary with glowing accent elements
-- Mobile-optimized type scale (16px base, 12px-36px range)
-- Haptic feedback for all interactions using Web Vibration API
-- Progressive disclosure to minimize cognitive load
-- Animation library: canvas-confetti for celebration effects
-
-**Key Design Decisions**:
-- Maximum viewport constraint of 512px (max-w-lg) to maintain mobile UX on larger screens
-- Touch target minimum of 44px × 44px for accessibility
-- Safe area insets for iOS notch/home indicator compatibility
-- Streaming AI responses to eliminate loading states >1s
-
-### Backend Architecture
-
-**Runtime**: Node.js with Express.js server framework.
-
-**API Design**: RESTful endpoints for CRUD operations with real-time streaming for AI interactions. The server acts as a "Smart Hub" that centralizes business logic rather than pushing complexity to the client.
-
-**AI Integration**: 
-- Google Gemini API (via @google/genai and @ai-sdk/google)
-- Hybrid model strategy: gemini-1.5-flash for speed-critical operations (chat, intent classification), potential gemini-1.5-pro for complex reasoning
-- Streaming responses using Vercel AI SDK (`ai` package) to provide real-time typing effects
-- Intent classification layer routes user input to appropriate system prompts (Mood/Task/Refinement)
-
-**Key Backend Logic**:
-- Intent classification determines user's energy flow (inner vs outer work)
-- SMART Guard transforms vague inputs into 3 concrete action options
-- Recursive task breakdown when users feel stuck
-- Sedona Method implementation for emotional processing (3-step: Identify → Allow → Release)
+- **Runtime**: Node.js with Express.js.
+- **API Design**: RESTful endpoints with real-time streaming for AI interactions. Acts as a "Smart Hub" centralizing business logic.
+- **AI Integration**:
+    - Google Gemini API (`gemini-1.5-flash` for speed, potential `gemini-1.5-pro` for complex reasoning).
+    - Vercel AI SDK for streaming responses.
+    - Intent classification routes user input to system prompts (Mood/Task/Refinement).
+- **Key Backend Logic**: Intent classification (inner vs. outer work), SMART Guard for action options, recursive task breakdown, and Sedona Method implementation (Identify → Allow → Release).
 
 ### Data Storage
 
-**Database**: PostgreSQL via Neon serverless (@neondatabase/serverless) chosen for serverless compatibility and WebSocket support.
-
-**ORM**: Drizzle ORM provides type-safe database operations with minimal overhead.
-
-**Schema Design**:
-
-1. **monuments**: Six fixed life areas with progress tracking
-   - Uses `slug` for human-readable identifiers
-   - Tracks `totalXp` for gamification
-   - Stores UI metadata (`color`, `icon`)
-
-2. **tasks**: Recursive tree structure supporting infinite nesting
-   - `parent_id` self-referencing foreign key enables breakdown
-   - `monument_id` links tasks to life areas
-   - `type` enum distinguishes "action" vs "inner_work" (emotional processing)
-   - `category` enum (E/A/P/X) classifies by life formula component:
-     - E (Elimination): Removing obstacles
-     - A (Accumulation): Building through repetition
-     - P (Planning): Direction correction
-     - X (eXperience): Creating meaning
-   - `metadata` JSONB column stores flexible data (emotion tags, context, AI reasoning) without schema changes
-   - `status` enum tracks completion state
-
-3. **sessions**: Maintains conversational flow state
-   - Tracks current step in 5-step flow
-   - Stores selected monument for context
-   - Records message history as JSONB
-   - Maintains flow type (mood vs task)
-
-**Trade-offs**: 
-- JSONB metadata chosen over normalized tables for flexibility during rapid iteration
-- Self-referencing tasks table simpler than separate tasks/subtasks tables
-- Neon serverless provides auto-scaling but may have cold start latency
-
-### External Dependencies
-
-**AI Services**:
-- Google Gemini API: Primary AI provider for conversational interface and intent classification
-- Requires `GEMINI_API_KEY` environment variable
-
-**Database**:
-- Neon PostgreSQL: Serverless Postgres with WebSocket support
-- Requires `DATABASE_URL` environment variable
-- Uses connection pooling via @neondatabase/serverless
-
-**Third-Party Libraries**:
-- Vercel AI SDK (`ai`): Streaming text generation utilities
-- Radix UI: Headless component primitives (15+ components: dialog, dropdown, accordion, etc.)
-- TanStack Query: Async state management
-- Drizzle ORM: Type-safe database layer with drizzle-kit for migrations
-- Tailwind CSS: Utility-first styling with custom theme configuration
-- canvas-confetti: Celebration animations for task completion
-- Wouter: Lightweight routing
-- Zod: Runtime type validation (via drizzle-zod)
-
-**Build Tools**:
-- Vite: Frontend build tool with React plugin
-- esbuild: Server-side bundling for deployment
-- TypeScript: End-to-end type safety
-- PostCSS with Autoprefixer: CSS processing
-
-**Development Dependencies**:
-- @replit plugins: Runtime error overlay, cartographer, dev banner for Replit-specific features
-
-**Font Strategy**: System fonts for native feel (SF Pro on iOS, Roboto on Android) with web fallback to Inter and Noto Sans TC (Traditional Chinese support).
-
-**PWA Configuration**: 
-- Manifest at `/client/public/manifest.json`
-- Standalone display mode for app-like experience
-- Theme color #030712 (dark gray)
-- Supports safe area insets for modern iOS devices
+- **Database**: PostgreSQL via Neon serverless.
+- **ORM**: Drizzle ORM for type-safe operations.
+- **Schema Design**:
+    - `monuments`: Six fixed life areas with progress tracking (`totalXp`, `slug`, UI metadata).
+    - `tasks`: Recursive tree structure with `parent_id`, `monument_id`, `type` (action/inner_work), `category` (Elimination/Accumulation/Planning/eXperience), `metadata` (JSONB), and `status`.
+    - `sessions`: Stores conversational flow state, selected monument, message history, and flow type.
+    - `userSettings`: User preferences (viewMode, aiPersona, theme).
+    - `viewModeHistory`: Tracks UI view mode changes.
+- **Trade-offs**: JSONB for flexibility, self-referencing tasks table for simplicity, Neon serverless for auto-scaling with potential cold start latency.
 
 ### Authentication
 
-**Replit Auth (OpenID Connect)**:
-- Uses Replit's built-in authentication via OpenID Connect
-- Supports multiple login methods (Google, GitHub, Apple, email/password)
-- Session management via PostgreSQL (`auth_sessions` table) using connect-pg-simple
-- Key files:
-  - `server/replitAuth.ts`: Handles OIDC setup, session management, and user upsert
-  - `shared/schema.ts`: Contains `replitUsers` and `authSessions` tables
-
-**Auth Endpoints**:
-- `GET /api/login`: Initiates OAuth flow
-- `GET /api/callback`: OAuth callback handler
-- `GET /api/logout`: Ends session and redirects to OIDC logout
-- `GET /api/auth/status`: Returns current auth state
-- `GET /api/auth/user`: Returns authenticated user details (protected)
-
-**Security Features**:
-- Secure cookies in production (HTTPS)
-- SameSite=lax for CSRF protection
-- Token refresh for expired access tokens
-- Sessions stored in PostgreSQL with TTL
+- **Provider**: Replit Auth (OpenID Connect) supporting Google, GitHub, Apple, email/password.
+- **Session Management**: PostgreSQL (`auth_sessions` table) using `connect-pg-simple`.
+- **Security**: Secure cookies, SameSite=lax, token refresh, sessions with TTL.
 
 ### Google Places Integration (Reality Resource Map)
 
-**Purpose**: Enables users to find nearby real-world resources (gym, library, cafe, etc.) to support their life goals.
+- **Purpose**: Helps users find nearby real-world resources (e.g., gym, library).
+- **API Endpoints**: `POST /api/places/search`, `GET /api/places/photo`, `GET /api/places/status`.
+- **Security**: API key is server-side proxied; never exposed to client.
+- **Default Keywords**: Monument-specific keywords for quick searches.
 
-**API Endpoints**:
-- `POST /api/places/search`: Search for nearby places
-  - Request: `{ keyword, latitude, longitude, radius?, maxResults? }`
-  - Response: `{ places: PlaceResult[] }`
-- `GET /api/places/photo`: Proxy for place photos (hides API key)
-  - Query: `?ref={photoReference}`
-  - Response: Image binary
-- `GET /api/places/status`: Check if Places API is configured
+### Development & Deployment
 
-**Frontend Components**:
-- `use-places.ts`: Hook for geolocation and places search
-- `places-card.tsx`: Displays search results with ratings, distance, and Google Maps links
-- Integrated into `collaborative-chat.tsx` via MapPin button
+- **Local Development**: `npm run dev`, `npm run build`, `npm run check`, `npm run db:push`.
+- **Build Configuration**: Tailwind and PostCSS configurations consolidated in the `client/` directory.
+- **Vercel Deployment**: `vercel.json` configures `installCommand` (`npm ci --include=dev`), `buildCommand` (`npm run build`), `outputDirectory` (`dist/public`), and Node.js version 20.
+- **Database Driver Selection**: Automatically selects `@neondatabase/serverless` for Replit and standard `pg` for Vercel (Supabase compatibility).
 
-**Security**: API key is never exposed to clients - photos are proxied through server
+## External Dependencies
 
-**Default Keywords by Monument**:
-- Career → coworking
-- Wealth → bank
-- Emotion → spa
-- Family → park
-- Health → gym
-- Experience → museum
-
-## Development & Deployment
-
-### Local Development (Replit)
-
-```bash
-npm run dev         # Start development server
-npm run build       # Build for production
-npm run check       # TypeScript type checking
-npm run db:push     # Sync database schema
-```
-
-### Build Configuration
-
-**Single Source of Truth**: All Tailwind and PostCSS configs are in `client/` directory:
-- `client/tailwind.config.cjs` - Tailwind configuration
-- `client/postcss.config.cjs` - PostCSS configuration
-
-**Important**: Do NOT create duplicate configs in root directory. Vite is configured with `root: "client"` and will find configs there.
-
-**Validation**: Run before deployment to catch config issues:
-```bash
-node scripts/validate-tailwind-config.cjs
-```
-
-### Vercel Deployment
-
-**Configuration** (`vercel.json`):
-- `installCommand`: `npm ci --include=dev` (required for Tailwind/PostCSS)
-- `buildCommand`: `npm run build`
-- `outputDirectory`: `dist/public`
-- Node.js version: 20 (specified in `.nvmrc`)
-
-**Build Process**:
-1. `viteBuild()` compiles React app from `client/` → `dist/public/`
-2. `esbuild` bundles server code → `dist/index.cjs`
-
-**Troubleshooting Build Failures**:
-
-| Symptom | Cause | Fix |
-|---------|-------|-----|
-| "content option is missing or empty" | Tailwind config not found | Ensure `client/tailwind.config.cjs` exists |
-| Only 3 modules transformed | Wrong content paths | Check paths are relative to `client/` |
-| CSS bundle too large (>50KB) | Purging not working | Verify content paths include all TSX files |
-| "border-border class does not exist" | Empty content causing purge | Fix content paths |
-
-**Cache Issues**: If builds fail after config changes, clear Vercel build cache via dashboard.
-
-### Environment Consistency
-
-| Aspect | Replit | Vercel |
-|--------|--------|--------|
-| Database | Neon Serverless | Supabase PostgreSQL |
-| Node.js | 20.x | 20.x (via .nvmrc) |
-| devDependencies | Always installed | `--include=dev` required |
-
-### Database Driver Selection
-
-The app automatically selects the appropriate database driver:
-- Replit: Uses `@neondatabase/serverless` with WebSocket support
-- Vercel: Uses standard `pg` driver for Supabase compatibility
-
-Configured via `VERCEL` environment variable detection in `server/db.ts`.
-
----
-
-## Vercel 部署除錯歷史 (2024-12-02)
-
-### 問題描述
-Vercel 部署持續失敗，錯誤訊息為 PostCSS/Tailwind 相關的 "content option is missing or empty"。本地 Replit 建置正常（2576 modules transformed），但 Vercel 只處理 3 modules。
-
-### 根本原因分析
-
-經過多次排查，發現**多個問題同時存在**：
-
-#### 1. Git Push 問題（最關鍵）
-- **症狀**：本地修復完成，但 Vercel 仍使用舊代碼
-- **原因**：有 5+ 個 commits 沒有 push 到 GitHub
-- **驗證**：`git log` 顯示 `origin/main` 落後於 `HEAD`
-- **解決**：執行 `git push`
-
-#### 2. Vercel Root Directory 設定錯誤
-- **症狀**：Vercel 找不到 `package.json`
-- **原因**：Root Directory 被設成 `client`，但 `client/` 沒有自己的 `package.json`
-- **解決**：清空 Root Directory（使用專案根目錄）
-
-#### 3. PostCSS 配置衝突
-- **症狀**：Vite 找不到正確的 Tailwind 配置
-- **原因**：根目錄和 `client/` 都有 PostCSS 配置，路徑指向混亂
-- **解決**：
-  - 根目錄 `postcss.config.cjs` 使用絕對路徑指向 `client/tailwind.config.cjs`
-  - `client/postcss.config.cjs` 使用相對路徑 `./tailwind.config.cjs`
-
-#### 4. Tailwind content 路徑問題
-- **症狀**：CSS 沒有包含任何 Tailwind 類別
-- **原因**：使用 `path.resolve()` 包裝 glob 模式會破壞 glob 解析
-- **解決**：使用純字串相對路徑：`"./src/**/*.{js,jsx,ts,tsx}"`
-
-### 最終正確配置
-
-**vercel.json**：
-```json
-{
-  "version": 2,
-  "installCommand": "npm ci --include=dev",
-  "buildCommand": "npm run build",
-  "outputDirectory": "dist/public"
-}
-```
-
-**Vercel Dashboard 設定**：
-| 設定 | 值 |
-|------|-----|
-| Root Directory | （留空） |
-| Framework Preset | Other 或 Vite |
-| Build Command | npm run build |
-| Output Directory | dist/public |
-| Install Command | npm ci --include=dev |
-
-**postcss.config.cjs（根目錄）**：
-```javascript
-const path = require("path");
-module.exports = {
-  plugins: {
-    tailwindcss: {
-      config: path.join(__dirname, "client", "tailwind.config.cjs"),
-    },
-    autoprefixer: {},
-  },
-};
-```
-
-**client/tailwind.config.cjs（content 部分）**：
-```javascript
-content: [
-  "./index.html",
-  "./src/**/*.{js,jsx,ts,tsx}",
-],
-```
-
-### 除錯經驗教訓
-
-1. **先確認 Git 狀態**：永遠先執行 `git status` 和 `git log --oneline -5` 確認本地與遠端同步
-2. **理解專案結構**：Monorepo 結構需要正確設定 Root Directory
-3. **不要混用路徑處理**：Tailwind content 路徑用純字串，PostCSS config 路徑用 `path.join()`
-4. **清除快取**：Vercel Redeploy 時不要勾選 "Use existing Build Cache"
-5. **一次只改一個變數**：方便定位問題
-
-### 關鍵檢查命令
-
-```bash
-# 確認 Git 狀態
-git status
-git log --oneline -5
-
-# 確認本地建置
-npm run build
-
-# 確認輸出目錄
-ls -la dist/public/
-
-# 確認 CSS 大小（應該 ~12-15KB）
-ls -lh dist/public/assets/*.css
-```
+- **AI Services**: Google Gemini API.
+- **Database**: Neon PostgreSQL.
+- **Third-Party Libraries**:
+    - Vercel AI SDK (`ai`)
+    - Radix UI
+    - TanStack Query
+    - Drizzle ORM
+    - Tailwind CSS
+    - canvas-confetti
+    - Wouter
+    - Zod
+- **Build Tools**: Vite, esbuild, TypeScript, PostCSS with Autoprefixer.
+- **Development Dependencies**: `@replit` plugins.
+- **Font Strategy**: System fonts with web fallbacks (Inter, Noto Sans TC).
+- **PWA Configuration**: Manifest, standalone display, theme color #030712, safe area insets.

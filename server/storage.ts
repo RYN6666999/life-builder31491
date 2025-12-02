@@ -1,5 +1,5 @@
 import { 
-  users, tasks, monuments, sessions, userSettings, savedLocations, healthData, healthSummary,
+  users, tasks, monuments, sessions, userSettings, savedLocations, healthData, healthSummary, viewModeHistory,
   type User, type InsertUser, 
   type Task, type InsertTask,
   type Monument, type InsertMonument,
@@ -7,7 +7,8 @@ import {
   type UserSettings, type InsertUserSettings,
   type SavedLocation, type InsertSavedLocation,
   type HealthData, type InsertHealthData,
-  type HealthSummary, type InsertHealthSummary
+  type HealthSummary, type InsertHealthSummary,
+  type ViewModeHistory, type InsertViewModeHistory
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, isNull, asc, inArray, gte, lte, desc } from "drizzle-orm";
@@ -57,6 +58,10 @@ export interface IStorage {
   createSavedLocation(location: InsertSavedLocation): Promise<SavedLocation>;
   updateSavedLocation(id: string, updates: Partial<InsertSavedLocation>): Promise<SavedLocation>;
   deleteSavedLocation(id: string): Promise<void>;
+  
+  // View Mode History
+  getViewModeHistory(userId?: string, limit?: number): Promise<ViewModeHistory[]>;
+  createViewModeHistory(record: InsertViewModeHistory): Promise<ViewModeHistory>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -399,6 +404,27 @@ export class DatabaseStorage implements IStorage {
         .limit(1);
     }
     return results[0] || undefined;
+  }
+
+  // View Mode History
+  async getViewModeHistory(userId?: string, limit: number = 20): Promise<ViewModeHistory[]> {
+    if (userId) {
+      return db.select().from(viewModeHistory)
+        .where(eq(viewModeHistory.userId, userId))
+        .orderBy(desc(viewModeHistory.createdAt))
+        .limit(limit);
+    }
+    return db.select().from(viewModeHistory)
+      .orderBy(desc(viewModeHistory.createdAt))
+      .limit(limit);
+  }
+
+  async createViewModeHistory(record: InsertViewModeHistory): Promise<ViewModeHistory> {
+    const [created] = await db
+      .insert(viewModeHistory)
+      .values(record as any)
+      .returning();
+    return created;
   }
 }
 

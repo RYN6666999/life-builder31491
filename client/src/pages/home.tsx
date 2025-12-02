@@ -4,6 +4,9 @@ import { StateCheck } from "@/components/state-check";
 import { MonumentSelection } from "@/components/monument-selection";
 import { CollaborativeChat, type Message, type ImageAttachment } from "@/components/collaborative-chat";
 import { TaskList } from "@/components/task-list";
+import { CalendarView } from "@/components/calendar-view";
+import { TreeView } from "@/components/tree-view";
+import { ViewModeToggle } from "@/components/view-mode-toggle";
 import { SedonaRelease, type SedonaMessage } from "@/components/sedona-release";
 import { BottomNav, type NavTab } from "@/components/bottom-nav";
 import { MonumentVisualization } from "@/components/monument-visualization";
@@ -23,7 +26,7 @@ import {
 } from "@/lib/storage";
 import { HistoryView } from "@/components/history-view";
 import { MONUMENTS, type MonumentConfig } from "@/lib/monuments";
-import type { Task, Monument, Session } from "@shared/schema";
+import type { Task, Monument, Session, UserSettings } from "@shared/schema";
 import confetti from "canvas-confetti";
 
 type FlowStep = "state-check" | "monument-selection" | "chat" | "tasks" | "sedona";
@@ -151,6 +154,14 @@ export default function Home() {
     queryKey: ["/api/tasks", selectedMonument?.id],
     enabled: !!selectedMonument,
   });
+
+  // Fetch user settings for view mode preference
+  const { data: settings } = useQuery<UserSettings>({
+    queryKey: ["/api/settings"],
+  });
+
+  // Current view mode from settings (default to list)
+  const currentViewMode = settings?.viewMode || "list";
 
   // Calculate monument progress
   const monumentProgress: MonumentProgress[] = monuments.map((m) => {
@@ -602,10 +613,34 @@ export default function Home() {
         );
       case "tasks":
         if (!selectedMonument) return null;
+        const monumentTasks = tasks.filter(t => t.monumentId === selectedMonument.id);
+        
+        if (currentViewMode === "calendar") {
+          return (
+            <CalendarView
+              tasks={monumentTasks}
+              monumentId={selectedMonument.id}
+              onBack={() => setFlowStep("chat")}
+              onComplete={completeTask.mutate}
+            />
+          );
+        }
+        
+        if (currentViewMode === "tree") {
+          return (
+            <TreeView
+              tasks={monumentTasks}
+              monument={selectedMonument}
+              onBack={() => setFlowStep("chat")}
+              onComplete={completeTask.mutate}
+            />
+          );
+        }
+        
         return (
           <TaskList
             monument={selectedMonument}
-            tasks={tasks.filter(t => t.monumentId === selectedMonument.id)}
+            tasks={monumentTasks}
             onBack={() => setFlowStep("chat")}
             onComplete={completeTask.mutate}
             onBreakdown={breakdownTask.mutate}
