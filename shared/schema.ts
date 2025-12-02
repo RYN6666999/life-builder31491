@@ -35,6 +35,7 @@ export type ReplitUser = typeof replitUsers.$inferSelect;
 export const taskStatusEnum = pgEnum("task_status", ["pending", "completed", "cancelled"]);
 export const taskTypeEnum = pgEnum("task_type", ["action", "inner_work"]);
 export const taskCategoryEnum = pgEnum("task_category", ["E", "A", "P", "X"]); // Elimination, Accumulation, Planning, eXperience
+export const taskQuadrantEnum = pgEnum("task_quadrant", ["Q1", "Q2", "Q3", "Q4"]); // Eisenhower Matrix: Q1=Do, Q2=Schedule, Q3=Delegate, Q4=Delete
 
 // Monuments table - The 6 life monuments
 export const monuments = pgTable("monuments", {
@@ -57,6 +58,7 @@ export const tasks = pgTable("tasks", {
   status: taskStatusEnum("status").notNull().default("pending"),
   type: taskTypeEnum("type").notNull().default("action"),
   category: taskCategoryEnum("category"), // E/A/P/X classification
+  quadrant: taskQuadrantEnum("quadrant"), // Eisenhower Matrix: Q1=緊急重要, Q2=不緊急重要, Q3=緊急不重要, Q4=不緊急不重要
   xpValue: integer("xp_value").notNull().default(10),
   sortOrder: integer("sort_order").notNull().default(0), // For ordering tasks
   isDraft: integer("is_draft").notNull().default(0), // 0 = confirmed, 1 = draft/proposed by AI
