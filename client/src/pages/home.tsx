@@ -605,6 +605,7 @@ export default function Home() {
         return (
           <TaskList
             monument={selectedMonument}
+            tasks={tasks.filter(t => t.monumentId === selectedMonument.id)}
             onBack={() => setFlowStep("chat")}
             onComplete={completeTask.mutate}
             onBreakdown={breakdownTask.mutate}
