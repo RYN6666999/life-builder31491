@@ -149,6 +149,44 @@ export class DatabaseStorage implements IStorage {
 
   async createBulkTasks(taskList: InsertTask[]): Promise<Task[]> {
     if (taskList.length === 0) return [];
+    
+    // Deduplicate: check for existing tasks with same content in the same session
+    const sessionId = taskList[0].sessionId;
+    if (sessionId) {
+      // Verify all tasks have the same sessionId - skip dedup if mixed
+      const allSameSession = taskList.every(t => t.sessionId === sessionId);
+      if (!allSameSession) {
+        console.warn("createBulkTasks: Mixed sessionIds detected, skipping deduplication");
+        // Insert all tasks without deduplication when sessions are mixed
+        const created = await db
+          .insert(tasks)
+          .values(taskList)
+          .returning();
+        return created;
+      }
+      
+      const existingTasks = await db.select().from(tasks).where(eq(tasks.sessionId, sessionId));
+      const seenContents = new Set(existingTasks.map(t => t.content.trim().toLowerCase()));
+      
+      // Filter out duplicates (including duplicates within the same batch)
+      const uniqueTasks: InsertTask[] = [];
+      for (const task of taskList) {
+        const normalizedContent = task.content.trim().toLowerCase();
+        if (!seenContents.has(normalizedContent)) {
+          seenContents.add(normalizedContent);
+          uniqueTasks.push(task);
+        }
+      }
+      
+      if (uniqueTasks.length === 0) return [];
+      
+      const created = await db
+        .insert(tasks)
+        .values(uniqueTasks)
+        .returning();
+      return created;
+    }
+    
     const created = await db
       .insert(tasks)
       .values(taskList)
@@ -206,10 +244,28 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createChildTasks(parentId: string, childTasks: Omit<InsertTask, 'parentId'>[]): Promise<Task[]> {
-    const tasksToInsert = childTasks.map((t, i) => ({
+    if (childTasks.length === 0) return [];
+    
+    // Deduplicate: check for existing child tasks with same content
+    const existingChildren = await db.select().from(tasks).where(eq(tasks.parentId, parentId));
+    const seenContents = new Set(existingChildren.map(t => t.content.trim().toLowerCase()));
+    
+    // Filter out duplicates (including duplicates within the same batch)
+    const uniqueChildren: Omit<InsertTask, 'parentId'>[] = [];
+    for (const task of childTasks) {
+      const normalizedContent = task.content.trim().toLowerCase();
+      if (!seenContents.has(normalizedContent)) {
+        seenContents.add(normalizedContent);
+        uniqueChildren.push(task);
+      }
+    }
+    
+    if (uniqueChildren.length === 0) return [];
+    
+    const tasksToInsert = uniqueChildren.map((t, i) => ({
       ...t,
       parentId,
-      sortOrder: i,
+      sortOrder: existingChildren.length + i,
     }));
     
     const created = await db
