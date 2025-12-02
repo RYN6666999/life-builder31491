@@ -113,12 +113,14 @@ function TaskItem({
                   hapticLight();
                   setShowQuadrantPicker(!showQuadrantPicker);
                 }}
+                data-testid={`toggle-quadrant-picker-${task.id}`}
               >
-                <QuadrantBadge quadrant={task.quadrant as QuadrantType | null} />
+                <QuadrantBadge quadrant={task.quadrant as QuadrantType | null} taskId={task.id} />
                 {!task.quadrant && (
                   <Badge 
                     variant="outline" 
                     className="text-xs py-0 opacity-50 hover:opacity-100"
+                    data-testid={`badge-add-quadrant-${task.id}`}
                   >
                     <Plus className="w-3 h-3 mr-1" />
                     象限

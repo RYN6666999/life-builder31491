@@ -178,6 +178,7 @@ export function QuadrantTabs({
               isDragging && "opacity-50",
               isDragOver && "border-l-2 border-primary"
             )}
+            data-testid={`draggable-tab-${quadrant.id}`}
           >
             <Button
               variant={isActive ? "secondary" : "ghost"}
@@ -216,7 +217,13 @@ export function getQuadrantInfo(quadrant: QuadrantType | null): QuadrantInfo | u
   return QUADRANTS.find(q => q.id === quadrant);
 }
 
-export function QuadrantBadge({ quadrant }: { quadrant: QuadrantType | null }) {
+export function QuadrantBadge({ 
+  quadrant, 
+  taskId 
+}: { 
+  quadrant: QuadrantType | null;
+  taskId?: string;
+}) {
   const info = getQuadrantInfo(quadrant);
   if (!info) return null;
 
@@ -226,6 +233,7 @@ export function QuadrantBadge({ quadrant }: { quadrant: QuadrantType | null }) {
     <Badge 
       variant="outline" 
       className={cn("text-xs py-0 gap-1", info.badgeClass)}
+      data-testid={taskId ? `badge-quadrant-${info.id}-${taskId}` : `badge-quadrant-${info.id}`}
     >
       <Icon className="w-3 h-3" />
       {info.labelCn}

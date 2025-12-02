@@ -87,7 +87,7 @@ function TaskItem({ task, childTasks, allTasks, level, onComplete, onBreakdown }
                   {categoryBadge.label}
                 </Badge>
               )}
-              <QuadrantBadge quadrant={task.quadrant as QuadrantType | null} />
+              <QuadrantBadge quadrant={task.quadrant as QuadrantType | null} taskId={task.id} />
             </div>
             
             <div className="flex items-center gap-2 mt-2">
