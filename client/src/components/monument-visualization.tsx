@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useLocation } from "wouter";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -72,6 +73,7 @@ function MonumentCard({
   progress: MonumentProgress;
   onSelect: () => void;
 }) {
+  const [, setLocation] = useLocation();
   const [isAnimating, setIsAnimating] = useState(false);
   const Icon = monument.icon;
   
@@ -134,7 +136,7 @@ function MonumentCard({
       )}
       onClick={() => {
         hapticLight();
-        onSelect();
+        setLocation(`/monuments/${monument.slug}`);
       }}
       data-testid={`card-monument-viz-${monument.slug}`}
     >

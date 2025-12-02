@@ -7,6 +7,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { ChevronLeft, ChevronDown, ChevronRight, Zap, AlertTriangle } from "lucide-react";
 import { hapticLight, hapticMedium, hapticSuccess } from "@/lib/haptics";
 import { cn } from "@/lib/utils";
+import { QuadrantBadge, type QuadrantType } from "./quadrant-tabs";
 import type { Task } from "@shared/schema";
 import type { MonumentConfig } from "@/lib/monuments";
 
@@ -86,6 +87,7 @@ function TaskItem({ task, childTasks, allTasks, level, onComplete, onBreakdown }
                   {categoryBadge.label}
                 </Badge>
               )}
+              <QuadrantBadge quadrant={task.quadrant as QuadrantType | null} />
             </div>
             
             <div className="flex items-center gap-2 mt-2">
