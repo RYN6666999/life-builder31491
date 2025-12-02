@@ -18,6 +18,7 @@ export interface Project {
   lastMessagePreview: string;
   messageCount: number;
   topicKeywords: string[];
+  sessionId?: string;
 }
 
 interface ConversationCache {
@@ -31,6 +32,7 @@ interface ConversationCache {
   sedonaStep: number;
   timestamp: number;
   activeProjectId?: string;
+  sessionId?: string;
 }
 
 const CONVERSATION_KEY = "lb_conversation_cache";
@@ -209,7 +211,8 @@ export function saveOrMergeProject(
   monumentId?: string,
   monumentName?: string,
   monumentSlug?: string,
-  existingProjectId?: string
+  existingProjectId?: string,
+  sessionId?: string
 ): string {
   const projects = loadProjects();
   const now = Date.now();
@@ -239,6 +242,7 @@ export function saveOrMergeProject(
         lastMessagePreview: preview,
         messageCount: currentMessages.length,
         topicKeywords: Array.from(new Set([...projects[existingIndex].topicKeywords, ...keywords])),
+        sessionId: sessionId || projects[existingIndex].sessionId, // 保持原本或更新
       };
       saveProjects(projects);
       return existingProjectId;
@@ -268,6 +272,7 @@ export function saveOrMergeProject(
       lastMessagePreview: preview,
       messageCount: (type === "sedona" ? sedonaMessages : mergedMessages).length,
       topicKeywords: Array.from(new Set([...mergeCandidate.topicKeywords, ...keywords])),
+      sessionId: sessionId || mergeCandidate.sessionId, // <--- merge 同理
     };
     saveProjects(projects);
     return mergeCandidate.id;
@@ -292,6 +297,7 @@ export function saveOrMergeProject(
     lastMessagePreview: preview,
     messageCount: currentMessages.length,
     topicKeywords: keywords,
+    sessionId,
   };
   
   projects.unshift(newProject);

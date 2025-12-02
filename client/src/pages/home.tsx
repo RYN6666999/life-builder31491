@@ -69,16 +69,19 @@ export default function Home() {
   useEffect(() => {
     const cached = loadConversation();
     if (cached) {
-      // For "chat" step, we can't restore sessionId (server-side), so fall back to state-check
-      // For "tasks" step, we need selectedMonument which we can restore from cache
       if (cached.flowStep === "chat") {
-        // Can't restore chat without sessionId, reset to state-check
-        setFlowStep("state-check");
-        setFlowType(null);
-        setMessages([]);
-        clearConversation();
+        if (cached.sessionId) {
+          setSessionId(cached.sessionId);
+          setFlowStep("chat");
+          setFlowType(cached.flowType);
+          setMessages(cached.messages);
+        } else {
+          setFlowStep("state-check");
+          setFlowType(null);
+          setMessages([]);
+          clearConversation();
+        }
       } else if (cached.flowStep === "tasks" && cached.monumentSlug) {
-        // Restore monument and go to tasks
         const monument = MONUMENTS.find(m => m.slug === cached.monumentSlug);
         if (monument) {
           setSelectedMonument(monument);
@@ -88,13 +91,11 @@ export default function Home() {
           setFlowStep("state-check");
         }
       } else if (cached.flowStep === "sedona") {
-        // Sedona doesn't require sessionId or selectedMonument
         setFlowStep("sedona");
         setFlowType(cached.flowType);
         setSedonaMessages(cached.sedonaMessages);
         setSedonaStep(cached.sedonaStep);
       } else {
-        // Default: monument-selection or state-check
         setFlowStep(cached.flowStep as FlowStep);
         setFlowType(cached.flowType);
         setMessages(cached.messages);
@@ -107,7 +108,6 @@ export default function Home() {
   // Auto-save conversation and project whenever it changes
   useEffect(() => {
     if (flowStep !== "state-check" && (messages.length > 0 || sedonaMessages.length > 0)) {
-      // Save current session cache
       saveConversation({
         flowStep,
         flowType,
@@ -118,9 +118,9 @@ export default function Home() {
         sedonaStep,
         timestamp: Date.now(),
         activeProjectId: activeProjectId || undefined,
+        sessionId: sessionId || undefined,
       });
       
-      // Save/merge into project (every message update)
       const type = flowStep === "sedona" ? "sedona" : "chat";
       const projectId = saveOrMergeProject(
         type,
@@ -132,13 +132,14 @@ export default function Home() {
         selectedMonument?.id,
         selectedMonument?.nameCn,
         selectedMonument?.slug,
-        activeProjectId || undefined
+        activeProjectId || undefined,
+        sessionId || undefined
       );
       if (projectId && projectId !== activeProjectId) {
         setActiveProjectId(projectId);
       }
     }
-  }, [flowStep, flowType, messages, sedonaMessages, sedonaStep, selectedMonument, activeProjectId]);
+  }, [flowStep, flowType, messages, sedonaMessages, sedonaStep, selectedMonument, activeProjectId, sessionId]);
 
   // Fetch monuments
   const { data: monuments = [] } = useQuery<Monument[]>({
@@ -538,137 +539,46 @@ export default function Home() {
       return (
         <HistoryView
           projects={projects}
-          onResumeProject={(project) => {
-            // Restore project state
+          onResumeProject={async (project) => {
             setFlowStep(project.flowStep as FlowStep);
             setFlowType(project.flowType);
             setMessages(project.messages);
             setSedonaMessages(project.sedonaMessages);
             setSedonaStep(project.sedonaStep);
             setActiveProjectId(project.id);
-            
-            // Restore monument if exists
             if (project.monumentSlug) {
               const monument = MONUMENTS.find(m => m.slug === project.monumentSlug);
-              if (monument) {
-                setSelectedMonument(monument);
-              }
+              if (monument) setSelectedMonument(monument);
             }
-            
+            // sessionId 恢復處理：
+            if (project.sessionId) {
+              setSessionId(project.sessionId);
+            } else if (project.flowStep === "chat") {
+              const session = await createSession.mutateAsync({ flowType: project.flowType || "task", monumentId: project.monumentId });
+              setSessionId(session.id);
+            }
             setActiveTab("home");
             toast({
               title: "專案已恢復",
               description: `繼續「${project.title}」`,
             });
           }}
-          onArchiveProject={(projectId) => {
-            archiveProject(projectId);
-            setProjectsRefresh(prev => prev + 1);
-          }}
-          onDeleteProject={(projectId) => {
-            deleteProject(projectId);
-            setProjectsRefresh(prev => prev + 1);
-          }}
-          onClearAll={() => {
-            clearAllProjects();
-            setProjectsRefresh(prev => prev + 1);
-          }}
         />
       );
     }
 
-    // Home tab - main flow
-    switch (flowStep) {
-      case "state-check":
-        return <StateCheck onSelect={handleStateCheckSelect} />;
-      
-      case "monument-selection":
-        return (
-          <MonumentSelection
-            onSelect={handleMonumentSelect}
-            onBack={handleBack}
-            monumentProgress={Object.fromEntries(
-              monumentProgress.map((p) => [p.slug, p.totalXp])
-            )}
-          />
-        );
-      
-      case "chat":
-        if (!sessionId) return null;
-        return (
-          <CollaborativeChat
-            monument={selectedMonument}
-            sessionId={sessionId}
-            messages={messages}
-            isLoading={isLoading}
-            onSendMessage={handleSendMessage}
-            onSelectOption={handleSelectOption}
-            onBack={handleBack}
-            onTasksUpdated={() => {
-              queryClient.invalidateQueries({ queryKey: ['/api/monuments'] });
-            }}
-            onMonumentSelected={(monument) => {
-              setSelectedMonument(monument);
-            }}
-            onSwitchToSedona={() => {
-              setFlowStep("sedona");
-              setFlowType("mood");
-              setSedonaMessages([{
-                id: "1",
-                role: "assistant",
-                content: "來地球玩的大師，我看到你需要調頻。讓我們一起清理這些能量，為你的顯化騰出空間。\n\n告訴我：此刻在你心中最清晰的感受是什麼？無須分析，只需要感受和敘述。",
-                step: 1,
-              }]);
-            }}
-          />
-        );
-      
-      case "tasks":
-        if (!selectedMonument) return null;
-        return (
-          <TaskList
-            monument={selectedMonument}
-            tasks={tasks.filter((t) => t.monumentId === selectedMonument.id)}
-            onComplete={(taskId) => completeTask.mutate(taskId)}
-            onBreakdown={(taskId) => breakdownTask.mutate(taskId)}
-            onBack={handleBack}
-          />
-        );
-      
-      case "sedona":
-        return (
-          <SedonaRelease
-            messages={sedonaMessages}
-            isLoading={isLoading}
-            currentStep={sedonaStep}
-            isComplete={sedonaComplete}
-            showModeSwitchPrompt={showModeSwitchPrompt}
-            switchReason={switchReason}
-            onSendMessage={handleSedonaMessage}
-            onBack={handleBack}
-            onComplete={handleSedonaComplete}
-            onSwitchToCreation={handleSwitchToCreation}
-            onDismissSwitch={handleDismissSwitch}
-            onBackToPreviousFlow={handleBackToPreviousFlow}
-            hasPreviousFlow={!!previousFlow}
-          />
-        );
-      
-      default:
-        return null;
-    }
+    return (
+      <StateCheck
+        onMoodSelect={handleStateCheckSelect}
+        onTaskSelect={handleStateCheckSelect}
+      />
+    );
   };
 
   return (
-    <div className="min-h-screen bg-background flex flex-col pb-20">
-      <div className="flex-1">
-        {renderContent()}
-      </div>
-      <BottomNav 
-        activeTab={activeTab} 
-        onTabChange={handleTabChange} 
-        onCreateProject={handleCreateProject}
-      />
+    <div className="flex flex-col h-full">
+      <BottomNav activeTab={activeTab} onTabChange={handleTabChange} />
+      {renderContent()}
     </div>
   );
 }
