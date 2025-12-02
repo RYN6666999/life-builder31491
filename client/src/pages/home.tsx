@@ -570,9 +570,67 @@ export default function Home() {
       );
     }
 
-    return (
-      <StateCheck onSelect={handleStateCheckSelect} />
-    );
+    // Home tab - main flow
+    switch (flowStep) {
+      case "state-check":
+        return <StateCheck onSelect={handleStateCheckSelect} />;
+      case "monument-selection":
+        return (
+          <MonumentSelection
+            onSelect={handleMonumentSelect}
+            onBack={handleBack}
+            monumentProgress={Object.fromEntries(
+              monumentProgress.map((p) => [p.slug, p.totalXp])
+            )}
+          />
+        );
+      case "chat":
+        if (!sessionId) return null;
+        return (
+          <CollaborativeChat
+            monument={selectedMonument}
+            sessionId={sessionId}
+            messages={messages}
+            isLoading={isLoading}
+            onSendMessage={handleSendMessage}
+            onSelectOption={handleSelectOption}
+            onBack={handleBack}
+            onTasksUpdated={() => {
+              queryClient.invalidateQueries({ queryKey: ['/api/monuments'] });
+            }}
+            onViewTasks={() => setFlowStep("tasks")}
+          />
+        );
+      case "tasks":
+        if (!selectedMonument) return null;
+        return (
+          <TaskList
+            monumentId={selectedMonument.id}
+            monumentName={selectedMonument.nameCn}
+            onBack={() => setFlowStep("chat")}
+            onComplete={completeTask.mutate}
+            onBreakdown={breakdownTask.mutate}
+          />
+        );
+      case "sedona":
+        return (
+          <SedonaRelease
+            messages={sedonaMessages}
+            currentStep={sedonaStep}
+            isComplete={sedonaComplete}
+            isLoading={isLoading}
+            onSendMessage={handleSedonaMessage}
+            onComplete={handleSedonaComplete}
+            onBack={handleBack}
+            showModeSwitchPrompt={showModeSwitchPrompt}
+            switchReason={switchReason}
+            onSwitchToCreation={handleSwitchToCreation}
+            onDismissSwitch={handleDismissSwitch}
+          />
+        );
+      default:
+        return <StateCheck onSelect={handleStateCheckSelect} />;
+    }
   };
 
   return (
