@@ -1,10 +1,10 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { ChevronLeft, ChevronDown, ChevronRight, Zap, AlertTriangle } from "lucide-react";
+import { ChevronLeft, ChevronDown, ChevronRight, Zap, AlertTriangle, Star } from "lucide-react";
 import { hapticLight, hapticMedium, hapticSuccess } from "@/lib/haptics";
 import { cn } from "@/lib/utils";
 import { QuadrantBadge, type QuadrantType } from "./quadrant-tabs";
@@ -17,6 +17,7 @@ interface TaskListProps {
   onComplete: (taskId: string) => void;
   onBreakdown: (taskId: string) => void;
   onBack: () => void;
+  topKeyActionIds?: Set<string>;
 }
 
 function getCategoryBadge(category: string | null) {
@@ -36,13 +37,17 @@ interface TaskItemProps {
   level: number;
   onComplete: (taskId: string) => void;
   onBreakdown: (taskId: string) => void;
+  topKeyActionIds?: Set<string>;
 }
 
-function TaskItem({ task, childTasks, allTasks, level, onComplete, onBreakdown }: TaskItemProps) {
+function TaskItem({ task, childTasks, allTasks, level, onComplete, onBreakdown, topKeyActionIds }: TaskItemProps) {
   const [isExpanded, setIsExpanded] = useState(true);
   const hasChildren = childTasks.length > 0;
   const isCompleted = task.status === "completed";
   const categoryBadge = getCategoryBadge(task.category);
+  const isManualKeyAction = task.isKeyAction === 1;
+  const isAutoHighlight = topKeyActionIds?.has(task.id) ?? false;
+  const isKeyAction = isManualKeyAction || isAutoHighlight;
 
   const handleCheck = () => {
     if (!isCompleted) {
@@ -57,7 +62,8 @@ function TaskItem({ task, childTasks, allTasks, level, onComplete, onBreakdown }
         className={cn(
           "p-4 transition-all duration-300",
           isCompleted && "opacity-60",
-          !isCompleted && "hover-elevate"
+          !isCompleted && "hover-elevate",
+          isKeyAction && !isCompleted && "ring-1 ring-amber-500/30 bg-amber-500/5"
         )}
       >
         <div className="flex items-start gap-3">
@@ -73,6 +79,12 @@ function TaskItem({ task, childTasks, allTasks, level, onComplete, onBreakdown }
           
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
+              {isKeyAction && (
+                <Star className={cn(
+                  "w-3.5 h-3.5 shrink-0",
+                  isManualKeyAction ? "text-amber-500 fill-amber-500" : "text-amber-400 fill-amber-400/50"
+                )} />
+              )}
               <p className={cn(
                 "text-sm",
                 isCompleted && "line-through text-muted-foreground"
@@ -145,6 +157,7 @@ function TaskItem({ task, childTasks, allTasks, level, onComplete, onBreakdown }
               level={level + 1}
               onComplete={onComplete}
               onBreakdown={onBreakdown}
+              topKeyActionIds={topKeyActionIds}
             />
           ))}
         </div>
@@ -153,12 +166,25 @@ function TaskItem({ task, childTasks, allTasks, level, onComplete, onBreakdown }
   );
 }
 
-export function TaskList({ monument, tasks, onComplete, onBreakdown, onBack }: TaskListProps) {
+export function TaskList({ monument, tasks, onComplete, onBreakdown, onBack, topKeyActionIds: propTopKeyActionIds }: TaskListProps) {
   const rootTasks = tasks.filter((t) => !t.parentId);
   const completedCount = tasks.filter((t) => t.status === "completed").length;
   const totalXp = tasks
     .filter((t) => t.status === "completed")
     .reduce((sum, t) => sum + t.xpValue, 0);
+
+  // Use passed topKeyActionIds or calculate locally as fallback
+  const localTopKeyActionIds = useMemo(() => {
+    const pendingLeafTasks = tasks.filter(t => 
+      t.status !== "completed" && 
+      !tasks.some(child => child.parentId === t.id)
+    );
+    const sorted = [...pendingLeafTasks].sort((a, b) => (b.xpValue || 0) - (a.xpValue || 0));
+    const top3 = sorted.slice(0, 3);
+    return new Set(top3.map(t => t.id));
+  }, [tasks]);
+  
+  const topKeyActionIds = propTopKeyActionIds || localTopKeyActionIds;
 
   const Icon = monument.icon;
   
@@ -227,6 +253,7 @@ export function TaskList({ monument, tasks, onComplete, onBreakdown, onBack }: T
                 level={0}
                 onComplete={onComplete}
                 onBreakdown={onBreakdown}
+                topKeyActionIds={topKeyActionIds}
               />
             ))
           )}

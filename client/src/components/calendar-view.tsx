@@ -14,7 +14,8 @@ import {
   Calendar as CalendarIcon,
   Sparkles,
   Clock,
-  Zap
+  Zap,
+  Star
 } from "lucide-react";
 import { hapticLight, hapticMedium, hapticSuccess } from "@/lib/haptics";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -30,6 +31,7 @@ interface CalendarViewProps {
   onAddTaskWithAI?: (date: Date) => void;
   onBack?: () => void;
   onComplete?: (taskId: string) => void;
+  topKeyActionIds?: Set<string>;
 }
 
 const HOURS = Array.from({ length: 24 }, (_, i) => i);
@@ -48,15 +50,18 @@ interface TaskBlockProps {
   task: Task;
   onClick: () => void;
   onComplete?: (taskId: string) => void;
+  isAutoHighlight?: boolean;
 }
 
-function TaskBlock({ task, onClick, onComplete }: TaskBlockProps) {
+function TaskBlock({ task, onClick, onComplete, isAutoHighlight }: TaskBlockProps) {
   const categoryBadge = getCategoryBadge(task.category);
   const startHour = task.dueTime ? parseInt(task.dueTime.split(":")[0]) : 9;
   const duration = task.duration || 60;
   const heightPx = (duration / 60) * 48;
   
   const isCompleted = task.status === "completed";
+  const isManualKeyAction = task.isKeyAction === 1;
+  const isKeyAction = isManualKeyAction || isAutoHighlight;
   
   const handleCheckClick = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -76,7 +81,8 @@ function TaskBlock({ task, onClick, onComplete }: TaskBlockProps) {
         task.quadrant === "Q2" && "bg-blue-500/20 border-l-blue-500",
         task.quadrant === "Q3" && "bg-amber-500/20 border-l-amber-500",
         task.quadrant === "Q4" && "bg-gray-500/20 border-l-gray-500",
-        !task.quadrant && "bg-muted border-l-border"
+        !task.quadrant && "bg-muted border-l-border",
+        isKeyAction && !isCompleted && "ring-1 ring-amber-500/50"
       )}
       style={{ 
         top: `${(startHour * 48) + 2}px`,
@@ -95,6 +101,12 @@ function TaskBlock({ task, onClick, onComplete }: TaskBlockProps) {
             onClick={handleCheckClick}
             data-testid={`calendar-task-check-${task.id}`}
           />
+        )}
+        {isKeyAction && (
+          <Star className={cn(
+            "w-3 h-3 shrink-0",
+            isManualKeyAction ? "text-amber-500 fill-amber-500" : "text-amber-400 fill-amber-400/50"
+          )} />
         )}
         {categoryBadge && (
           <span className={cn("shrink-0 w-4 h-4 rounded text-[10px] flex items-center justify-center", categoryBadge.className)}>
@@ -121,9 +133,10 @@ interface DayColumnProps {
   onTaskClick: (task: Task) => void;
   onAddTask: (date: Date, hour?: number) => void;
   onComplete?: (taskId: string) => void;
+  topKeyActionIds?: Set<string>;
 }
 
-function DayColumn({ date, tasks, onTaskClick, onAddTask, onComplete }: DayColumnProps) {
+function DayColumn({ date, tasks, onTaskClick, onAddTask, onComplete, topKeyActionIds }: DayColumnProps) {
   const dayTasks = tasks.filter(t => t.dueDate && isSameDay(new Date(t.dueDate), date));
   const isCurrentDay = isToday(date);
   
@@ -177,6 +190,7 @@ function DayColumn({ date, tasks, onTaskClick, onAddTask, onComplete }: DayColum
             task={task}
             onClick={() => onTaskClick(task)}
             onComplete={onComplete}
+            isAutoHighlight={topKeyActionIds?.has(task.id)}
           />
         ))}
       </div>
@@ -327,7 +341,7 @@ function AddTaskDialog({
   );
 }
 
-export function CalendarView({ monumentId, tasks: propTasks, onAddTaskWithAI, onBack, onComplete }: CalendarViewProps) {
+export function CalendarView({ monumentId, tasks: propTasks, onAddTaskWithAI, onBack, onComplete, topKeyActionIds: propTopKeyActionIds }: CalendarViewProps) {
   const { toast } = useToast();
   const [currentWeekStart, setCurrentWeekStart] = useState(() => startOfWeek(new Date(), { weekStartsOn: 1 }));
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
@@ -344,6 +358,19 @@ export function CalendarView({ monumentId, tasks: propTasks, onAddTaskWithAI, on
   });
   
   const tasks = propTasks || fetchedTasks;
+
+  // Use passed topKeyActionIds or calculate locally as fallback
+  const localTopKeyActionIds = useMemo(() => {
+    const pendingLeafTasks = tasks.filter(t => 
+      t.status !== "completed" && 
+      !tasks.some(child => child.parentId === t.id)
+    );
+    const sorted = [...pendingLeafTasks].sort((a, b) => (b.xpValue || 0) - (a.xpValue || 0));
+    const top3 = sorted.slice(0, 3);
+    return new Set(top3.map(t => t.id));
+  }, [tasks]);
+  
+  const topKeyActionIds = propTopKeyActionIds || localTopKeyActionIds;
 
   const { data: monuments = [] } = useQuery<Monument[]>({
     queryKey: ["/api/monuments"],
@@ -532,6 +559,7 @@ export function CalendarView({ monumentId, tasks: propTasks, onAddTaskWithAI, on
                 onTaskClick={handleTaskClick}
                 onAddTask={handleAddTask}
                 onComplete={handleComplete}
+                topKeyActionIds={topKeyActionIds}
               />
             ))}
           </div>

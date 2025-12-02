@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useMemo } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { StateCheck } from "@/components/state-check";
 import { MonumentSelection } from "@/components/monument-selection";
@@ -175,6 +175,17 @@ export default function Home() {
       level: Math.floor(m.totalXp / 100),
     };
   });
+
+  // Centralized calculation of top 3 key actions by XP value (80/20 principle)
+  const topKeyActionIds = useMemo(() => {
+    const pendingLeafTasks = tasks.filter(t => 
+      t.status !== "completed" && 
+      !tasks.some(child => child.parentId === t.id)
+    );
+    const sorted = [...pendingLeafTasks].sort((a, b) => (b.xpValue || 0) - (a.xpValue || 0));
+    const top3 = sorted.slice(0, 3);
+    return new Set(top3.map(t => t.id));
+  }, [tasks]);
 
   // Create session mutation
   const createSession = useMutation({
@@ -376,9 +387,20 @@ export default function Home() {
               const data = JSON.parse(line.slice(6));
               if (data.type === "chunk") {
                 streamedText += data.content;
-                setStreamingContent(streamedText);
+                // Only display streaming content if it looks like natural language
+                const trimmed = streamedText.trim();
+                const looksLikeJson = trimmed.startsWith("{") || 
+                                     trimmed.startsWith("```") ||
+                                     (trimmed.startsWith('"') && trimmed.includes('":'));
+                if (!looksLikeJson) {
+                  setStreamingContent(streamedText);
+                }
               } else if (data.type === "complete") {
                 finalData = data.data;
+                // When complete arrives, show the actual content immediately
+                if (finalData?.content) {
+                  setStreamingContent(finalData.content);
+                }
               }
             } catch {
               // Ignore parse errors from partial chunks
@@ -759,6 +781,7 @@ export default function Home() {
               monumentId={selectedMonument.id}
               onBack={() => setFlowStep("chat")}
               onComplete={completeTask.mutate}
+              topKeyActionIds={topKeyActionIds}
             />
           );
         }
@@ -770,6 +793,7 @@ export default function Home() {
               monument={selectedMonument}
               onBack={() => setFlowStep("chat")}
               onComplete={completeTask.mutate}
+              topKeyActionIds={topKeyActionIds}
             />
           );
         }
@@ -781,6 +805,7 @@ export default function Home() {
             onBack={() => setFlowStep("chat")}
             onComplete={completeTask.mutate}
             onBreakdown={breakdownTask.mutate}
+            topKeyActionIds={topKeyActionIds}
           />
         );
       case "sedona":

@@ -345,6 +345,8 @@ export async function registerRoutes(
         // Silently fail if health data is not available
       }
 
+      let emotionalDetected = false;
+      
       if (session.flowType === "mood") {
         mode = "sedona";
         // Get current sedona step from session metadata
@@ -359,8 +361,8 @@ export async function registerRoutes(
         if (intent.mode === "breakdown") {
           mode = "breakdown";
         } else if (intent.isEmotional) {
-          // Switch to sedona mode
-          mode = "sedona";
+          emotionalDetected = true;
+          // Don't switch to sedona mode yet, offer options instead
         } else {
           mode = "collaborative";
         }
@@ -372,6 +374,25 @@ export async function registerRoutes(
             context.monumentSlug = monument.slug;
           }
         }
+      }
+
+      // If emotional content detected, offer choice instead of processing
+      if (emotionalDetected) {
+        const emotionalResponse = {
+          content: "大師，我感受到您話語中的情緒波動。這是很珍貴的覺察時刻。\n\n您可以選擇：",
+          options: ["進入內在釋放（Sedona 方法）", "繼續任務討論"],
+          optionsNote: "選擇內在釋放可以幫助您清理阻礙，讓後續行動更輕鬆"
+        };
+        
+        // Update session with the emotional response
+        const updatedMessages = [
+          ...(session.messages as any[]) || [],
+          { role: "user", content: message },
+          { role: "assistant", content: emotionalResponse.content }
+        ];
+        await storage.updateSession(sessionId, { messages: updatedMessages });
+        
+        return res.json(emotionalResponse);
       }
 
       // Call AI (with images if provided)
@@ -654,6 +675,8 @@ export async function registerRoutes(
         context.conversationHistory = (session.messages as any[]).slice(-6);
       }
 
+      let emotionalDetected = false;
+      
       if (session.flowType === "mood") {
         mode = "sedona";
         const currentStep = (session.messages as any[])?.filter(
@@ -665,7 +688,8 @@ export async function registerRoutes(
         if (intent.mode === "breakdown") {
           mode = "breakdown";
         } else if (intent.isEmotional) {
-          mode = "sedona";
+          emotionalDetected = true;
+          // Don't switch to sedona mode yet, offer options instead
         }
         
         if (session.selectedMonumentId) {
@@ -674,6 +698,29 @@ export async function registerRoutes(
             context.monumentSlug = monument.slug;
           }
         }
+      }
+
+      // If emotional content detected, offer choice instead of streaming Sedona
+      if (emotionalDetected) {
+        const emotionalResponse = {
+          content: "大師，我感受到您話語中的情緒波動。這是很珍貴的覺察時刻。\n\n您可以選擇：",
+          options: ["進入內在釋放（Sedona 方法）", "繼續任務討論"],
+          optionsNote: "選擇內在釋放可以幫助您清理阻礙，讓後續行動更輕鬆"
+        };
+        
+        // Update session with the emotional response
+        const updatedMessages = [
+          ...(session.messages as any[]) || [],
+          { role: "user", content: message },
+          { role: "assistant", content: emotionalResponse.content }
+        ];
+        await storage.updateSession(sessionId, { messages: updatedMessages });
+        
+        // Send the complete response immediately (no slow streaming)
+        res.write(`data: ${JSON.stringify({ type: "complete", data: emotionalResponse })}\n\n`);
+        res.write(`data: ${JSON.stringify({ type: "done" })}\n\n`);
+        res.end();
+        return;
       }
 
       // Send thinking indicator

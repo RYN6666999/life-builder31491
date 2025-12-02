@@ -59,6 +59,7 @@ interface TreeNodeProps {
   onAddSubtask: (parentId: string) => void;
   expandedNodes: Set<string>;
   toggleNode: (taskId: string) => void;
+  topKeyActionIds?: Set<string>;
 }
 
 function TreeNode({ 
@@ -71,13 +72,16 @@ function TreeNode({
   onEdit,
   onAddSubtask,
   expandedNodes,
-  toggleNode
+  toggleNode,
+  topKeyActionIds
 }: TreeNodeProps) {
   const hasChildren = children.length > 0;
   const isExpanded = expandedNodes.has(task.id);
   const isCompleted = task.status === "completed";
   const categoryBadge = getCategoryBadge(task.category);
-  const isKeyAction = task.isKeyAction === 1;
+  const isManualKeyAction = task.isKeyAction === 1;
+  const isAutoHighlight = topKeyActionIds?.has(task.id) ?? false;
+  const isKeyAction = isManualKeyAction || isAutoHighlight;
   
   const completedChildren = children.filter(c => c.status === "completed").length;
   const totalChildren = children.length;
@@ -160,7 +164,10 @@ function TreeNode({
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
             {isKeyAction && (
-              <Star className="w-3.5 h-3.5 text-amber-500 fill-amber-500 shrink-0" />
+              <Star className={cn(
+                "w-3.5 h-3.5 shrink-0",
+                isManualKeyAction ? "text-amber-500 fill-amber-500" : "text-amber-400 fill-amber-400/50"
+              )} />
             )}
             <span className={cn(
               "text-sm",
@@ -286,6 +293,7 @@ function TreeNode({
               onAddSubtask={onAddSubtask}
               expandedNodes={expandedNodes}
               toggleNode={toggleNode}
+              topKeyActionIds={topKeyActionIds}
             />
           ))}
         </div>
@@ -305,6 +313,7 @@ interface MonumentTreeProps {
   toggleNode: (taskId: string) => void;
   isExpanded: boolean;
   onToggle: () => void;
+  topKeyActionIds: Set<string>;
 }
 
 function MonumentTree({ 
@@ -317,7 +326,8 @@ function MonumentTree({
   expandedNodes,
   toggleNode,
   isExpanded,
-  onToggle
+  onToggle,
+  topKeyActionIds
 }: MonumentTreeProps) {
   const monumentConfig = MONUMENTS.find(m => m.slug === monument.slug);
   if (!monumentConfig) return null;
@@ -398,6 +408,7 @@ function MonumentTree({
                 onAddSubtask={onAddSubtask}
                 expandedNodes={expandedNodes}
                 toggleNode={toggleNode}
+                topKeyActionIds={topKeyActionIds}
               />
             ))
           )}
@@ -415,9 +426,10 @@ interface TreeViewProps {
   monument?: MonumentConfig;
   onBack?: () => void;
   onComplete?: (taskId: string) => void;
+  topKeyActionIds?: Set<string>;
 }
 
-export function TreeView({ tasks: propTasks, monument, onBack, onComplete }: TreeViewProps) {
+export function TreeView({ tasks: propTasks, monument, onBack, onComplete, topKeyActionIds: propTopKeyActionIds }: TreeViewProps) {
   const { toast } = useToast();
   const [expandedNodes, setExpandedNodes] = useState<Set<string>>(new Set());
   const [expandedMonuments, setExpandedMonuments] = useState<Set<string>>(new Set());
@@ -450,6 +462,19 @@ export function TreeView({ tasks: propTasks, monument, onBack, onComplete }: Tre
     });
     return grouped;
   }, [monuments, allTasks]);
+
+  // Use passed topKeyActionIds or calculate locally as fallback
+  const localTopKeyActionIds = useMemo(() => {
+    const pendingLeafTasks = allTasks.filter(t => 
+      t.status !== "completed" && 
+      !allTasks.some(child => child.parentId === t.id)
+    );
+    const sorted = [...pendingLeafTasks].sort((a, b) => (b.xpValue || 0) - (a.xpValue || 0));
+    const top3 = sorted.slice(0, 3);
+    return new Set(top3.map(t => t.id));
+  }, [allTasks]);
+  
+  const topKeyActionIds = propTopKeyActionIds || localTopKeyActionIds;
 
   const internalCompleteTask = useMutation({
     mutationFn: async (taskId: string) => {
@@ -488,7 +513,7 @@ export function TreeView({ tasks: propTasks, monument, onBack, onComplete }: Tre
     },
     onSuccess: (_, taskId) => {
       queryClient.invalidateQueries({ queryKey: ["/api/tasks"] });
-      setExpandedNodes(prev => new Set([...prev, taskId]));
+      setExpandedNodes(prev => new Set(Array.from(prev).concat([taskId])));
       toast({
         title: "任務已拆解",
         description: "AI 已將任務分解為更小的步驟",
@@ -525,7 +550,7 @@ export function TreeView({ tasks: propTasks, monument, onBack, onComplete }: Tre
     },
     onSuccess: (_, { parentId }) => {
       queryClient.invalidateQueries({ queryKey: ["/api/tasks"] });
-      setExpandedNodes(prev => new Set([...prev, parentId]));
+      setExpandedNodes(prev => new Set(Array.from(prev).concat([parentId])));
       setAddingSubtaskParentId(null);
       setNewSubtaskContent("");
       toast({
@@ -756,6 +781,7 @@ export function TreeView({ tasks: propTasks, monument, onBack, onComplete }: Tre
                 toggleNode={toggleNode}
                 isExpanded={expandedMonuments.has(m.id)}
                 onToggle={() => toggleMonument(m.id)}
+                topKeyActionIds={topKeyActionIds}
               />
             ))}
           </div>

@@ -78,3 +78,23 @@ Preferred communication style: Simple, everyday language.
 - **Development Dependencies**: `@replit` plugins.
 - **Font Strategy**: System fonts with web fallbacks (Inter, Noto Sans TC).
 - **PWA Configuration**: Manifest, standalone display, theme color #030712, safe area insets.
+
+## Recent Changes (December 2025)
+
+### Emotional Detection with User Choice
+- AI now detects emotional content in user messages and offers two options:
+  - "1.內在釋放 (Sedona引導)" - Inner release with Sedona Method guidance
+  - "2.繼續任務討論" - Continue task discussion
+- Session message history is preserved across emotional detection flow
+
+### Auto-Highlight Top 3 Key Actions (80/20 Principle)
+- Automatically highlights top 3 pending leaf tasks by XP value across all views
+- Visual differentiation between manual and auto-highlighted key actions:
+  - Manual: Solid gold star icon (`fill-amber-500`)
+  - Auto-highlight: Semi-transparent gold star icon (`fill-amber-400/50`)
+- Implemented in: TreeView, TaskList, CalendarView components
+
+### Streaming Response Optimization
+- Filters out raw JSON from streaming display
+- Shows only natural language content to users
+- Immediately displays final content when complete event arrives
