@@ -563,15 +563,15 @@ export default function Home() {
               description: `繼續「${project.title}」`,
             });
           }}
+          onArchiveProject={(projectId) => { archiveProject(projectId); setProjectsRefresh(prev => prev + 1); }}
+          onDeleteProject={(projectId) => { deleteProject(projectId); setProjectsRefresh(prev => prev + 1); }}
+          onClearAll={() => { clearAllProjects(); setProjectsRefresh(prev => prev + 1); }}
         />
       );
     }
 
     return (
-      <StateCheck
-        onMoodSelect={handleStateCheckSelect}
-        onTaskSelect={handleStateCheckSelect}
-      />
+      <StateCheck onSelect={handleStateCheckSelect} />
     );
   };
 
