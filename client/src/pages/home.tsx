@@ -598,15 +598,13 @@ export default function Home() {
             onTasksUpdated={() => {
               queryClient.invalidateQueries({ queryKey: ['/api/monuments'] });
             }}
-            onViewTasks={() => setFlowStep("tasks")}
           />
         );
       case "tasks":
         if (!selectedMonument) return null;
         return (
           <TaskList
-            monumentId={selectedMonument.id}
-            monumentName={selectedMonument.nameCn}
+            monument={selectedMonument}
             onBack={() => setFlowStep("chat")}
             onComplete={completeTask.mutate}
             onBreakdown={breakdownTask.mutate}
