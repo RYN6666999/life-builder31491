@@ -365,3 +365,19 @@ export const insertHealthSummarySchema = createInsertSchema(healthSummary).omit(
 
 export type HealthSummary = typeof healthSummary.$inferSelect;
 export type InsertHealthSummary = z.infer<typeof insertHealthSummarySchema>;
+
+// ============ MANDALART GENERATION SCHEMA ============
+// The "Lazy Genius" Contract - AI output structure for goal decomposition
+export const mandalartGenerationSchema = z.object({
+  centerTitle: z.string().describe("The user's main goal"),
+  children: z.array(z.object({
+    slot: z.number().int().min(1).max(8).describe("Grid position 1-8"),
+    title: z.string().describe("Sub-task title"),
+    priority: z.enum(['Q1', 'Q2', 'Q3', 'Q4']).describe("Eisenhower Matrix: Q1=Urgent/Imp, Q2=Not Urgent/Imp, Q3=Urgent/Not Imp, Q4=Delete"),
+    estimatedMinutes: z.number().describe("Time estimation for the first step (mins)"),
+    actionStep: z.string().describe("The very first immediate action (e.g., 'Open Browser')"),
+    mcpIntent: z.enum(['search', 'writing', 'planning', 'none']).describe("Future hook for MCP tools")
+  })).length(8)
+});
+
+export type MandalartGeneration = z.infer<typeof mandalartGenerationSchema>;

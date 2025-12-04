@@ -1,0 +1,107 @@
+🧱 Master Prompt: Implement AI Mandalart Generation Logic
+Role: Senior Full-Stack Developer Objective: Implement the core backend logic and a test interface for the "Mandalart Decomposition" feature.
+
+Please execute the implementation following these 5 Meta Principles:
+
+1. 元原則 I：意圖明確性 (Intent Clarity)
+Task: We are building the "Bridge" between user goals and the 3x3 Grid. Scope:
+
+Define the Zod Schema for structured AI output.
+
+Implement the backend logic in server/gemini.ts.
+
+Expose an API endpoint in server/routes.ts.
+
+Create a minimal isolation test page on the frontend to verify the JSON output. Note: Do NOT build the complex UI Grid component yet. We only need raw JSON verification now.
+
+2. 元原則 II：上下文完整性 (Context Completeness)
+Architecture Reference (Based on provided README.md):
+
+Framework: Vite (React) + Express (Node.js). (Note: This is NOT Next.js App Router).
+
+Language: TypeScript.
+
+AI Stack: Vercel AI SDK (ai), Google Gemini 2.5 Flash (@ai-sdk/google).
+
+File Structure:
+
+shared/schema.ts (Zod definitions)
+
+server/gemini.ts (AI Logic)
+
+server/routes.ts (Express API definition)
+
+client/src/pages/ (Frontend Views)
+
+client/src/App.tsx (Routing)
+
+3. 元原則 V：資料與工具優先 (Data First)
+Action: First, define the output contract in shared/schema.ts. Do not change the existing DB schema yet. Add this specifically for the generative AI response:
+
+TypeScript
+
+import { z } from "zod";
+
+// The "Lazy Genius" Contract
+export const mandalartGenerationSchema = z.object({
+  centerTitle: z.string().describe("The user's main goal"),
+  children: z.array(z.object({
+    slot: z.number().int().min(1).max(8).describe("Grid position 1-8"),
+    title: z.string().describe("Sub-task title"),
+    priority: z.enum(['Q1', 'Q2', 'Q3', 'Q4']).describe("Eisenhower Matrix: Q1=Urgent/Imp, Q2=Not Urgent/Imp, Q3=Urgent/Not Imp, Q4=Delete"),
+    estimatedMinutes: z.number().describe("Time estimation for the first step (mins)"),
+    actionStep: z.string().describe("The very first immediate action (e.g., 'Open Browser')"),
+    mcpIntent: z.enum(['search', 'writing', 'planning', 'none']).describe("Future hook for MCP tools")
+  })).length(8)
+});
+
+export type MandalartGeneration = z.infer<typeof mandalartGenerationSchema>;
+4. 元原則 III：認知負載效率 (Implementation Steps)
+Please implement in this exact order to reduce debugging load:
+
+Step A: Backend Logic (server/gemini.ts)
+
+Import generateObject from ai.
+
+Import mandalartGenerationSchema.
+
+Export function generateMandalartPlan(goal: string).
+
+Model: google('gemini-2.5-flash').
+
+System Prompt:
+
+"You are the 'Data Spirit Guide' (數據指導靈). Break down the user's goal into 8 actionable steps.
+
+Use the Eisenhower Matrix logic.
+
+Ensure 'actionStep' is extremely concrete (low friction).
+
+Strictly follow the JSON schema."
+
+Step B: API Endpoint (server/routes.ts)
+
+Add POST /api/mandalart/generate.
+
+Body: { goal: string }.
+
+Response: Returns the JSON object from generateMandalartPlan.
+
+Step C: Frontend Test Page (client/src/pages/test-mandalart.tsx)
+
+Create a simple UI: Input (Goal) + Button (Generate) + <pre> block (Output).
+
+Use fetch to call the API.
+
+Routing: Register the route /test-mandalart in client/src/App.tsx.
+
+5. 元原則 IV：迭代可驗證性 (Verifiability)
+Acceptance Criteria:
+
+I can navigate to /test-mandalart.
+
+I can type "Plan a trip to Tokyo".
+
+I see a structured JSON object appear with exactly 8 children, properly tagged with "Q1-Q4" and "mcpIntent".
+
+No TypeScript errors in the console.
