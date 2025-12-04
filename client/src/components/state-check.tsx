@@ -1,8 +1,9 @@
 import { Card } from "@/components/ui/card";
-import { Heart, Zap } from "lucide-react";
+import { Heart, Zap, Sparkles } from "lucide-react";
 import { hapticMedium } from "@/lib/haptics";
 import { cn } from "@/lib/utils";
 import { WisdomTicker } from "./wisdom-ticker";
+import { Link } from "wouter";
 
 interface StateCheckProps {
   onSelect: (type: "mood" | "task") => void;
@@ -83,6 +84,34 @@ export function StateCheck({ onSelect }: StateCheckProps) {
           </div>
           <div className="absolute inset-0 rounded-md bg-blue-500/5 opacity-0 hover:opacity-100 transition-opacity pointer-events-none" />
         </Card>
+
+        <Link href="/test-mandalart">
+          <Card
+            className={cn(
+              "relative p-8 cursor-pointer transition-all duration-300",
+              "hover-elevate active-elevate-2 border border-border",
+              "bg-gradient-to-br from-amber-900/20 to-amber-800/10",
+              "hover:border-amber-500/50"
+            )}
+            onClick={() => hapticMedium()}
+            data-testid="card-summon"
+          >
+            <div className="flex flex-col items-center text-center space-y-4">
+              <div className="w-16 h-16 rounded-full bg-amber-500/20 flex items-center justify-center">
+                <Sparkles className="w-8 h-8 text-amber-400" />
+              </div>
+              <div>
+                <h2 className="text-2xl font-semibold text-foreground mb-2">
+                  召喚 (Summon)
+                </h2>
+                <p className="text-muted-foreground">
+                  AI 曼陀羅計劃生成
+                </p>
+              </div>
+            </div>
+            <div className="absolute inset-0 rounded-md bg-amber-500/5 opacity-0 hover:opacity-100 transition-opacity pointer-events-none" />
+          </Card>
+        </Link>
       </div>
 
       <div className="mt-12 w-full">
