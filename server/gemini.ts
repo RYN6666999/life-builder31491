@@ -1,5 +1,8 @@
 import { GoogleGenAI } from "@google/genai";
+import { generateObject } from "ai";
+import { google } from "@ai-sdk/google";
 import { WISDOM_QUOTES } from "../lib/quotes";
+import { mandalartGenerationSchema, type MandalartGeneration } from "@shared/schema";
 
 // Initialize Gemini AI client
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || "" });
@@ -512,5 +515,51 @@ export async function classifyIntent(
   } catch (error) {
     console.error("Intent classification error:", error);
     return { mode: "collaborative", isEmotional: false };
+  }
+}
+
+// ============ MANDALART GENERATION ============
+// Generate a 3x3 Mandalart grid from a user goal using structured output
+
+const MANDALART_SYSTEM_PROMPT = `You are the "Data Spirit Guide" (數據指導靈), a wise advisor helping users break down their goals into actionable steps.
+
+Your task is to decompose the user's goal into exactly 8 actionable sub-tasks arranged around a center goal in a 3x3 Mandalart grid.
+
+Rules:
+1. Break down the goal into 8 DISTINCT sub-tasks (slots 1-8, surrounding the center)
+2. Use the Eisenhower Matrix to prioritize each sub-task:
+   - Q1: Urgent AND Important (Do First)
+   - Q2: Not Urgent but Important (Schedule)
+   - Q3: Urgent but Not Important (Delegate/Quick)
+   - Q4: Not Urgent and Not Important (Consider Eliminating)
+3. Make each "actionStep" extremely concrete and LOW FRICTION - the very first physical action
+   - Good: "Open browser and search for Tokyo hotels"
+   - Bad: "Research accommodations" (too vague)
+4. Estimate realistic time in minutes for completing the first step
+5. Assign mcpIntent based on what tool would help:
+   - search: Needs web research
+   - writing: Needs text generation/editing
+   - planning: Needs scheduling/organization
+   - none: Manual action only
+
+Aim for a balanced distribution across Q1-Q4 priorities.`;
+
+export async function generateMandalartPlan(goal: string): Promise<MandalartGeneration> {
+  try {
+    const { object } = await generateObject({
+      model: google("gemini-2.5-flash-preview-04-17"),
+      schema: mandalartGenerationSchema,
+      system: MANDALART_SYSTEM_PROMPT,
+      prompt: `Break down this goal into a Mandalart grid with 8 actionable sub-tasks:
+
+Goal: "${goal}"
+
+Generate a structured plan with the goal as centerTitle and exactly 8 children (slots 1-8).`,
+    });
+
+    return object;
+  } catch (error) {
+    console.error("Mandalart generation error:", error);
+    throw new Error("Failed to generate Mandalart plan");
   }
 }
