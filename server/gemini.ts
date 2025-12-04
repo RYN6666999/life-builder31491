@@ -1,8 +1,6 @@
 import { GoogleGenAI } from "@google/genai";
-import { generateObject } from "ai";
-import { google } from "@ai-sdk/google";
 import { WISDOM_QUOTES } from "../lib/quotes";
-import { mandalartGenerationSchema, type MandalartGeneration } from "@shared/schema";
+import type { MandalartGeneration } from "@shared/schema";
 
 // Initialize Gemini AI client
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || "" });
@@ -519,7 +517,7 @@ export async function classifyIntent(
 }
 
 // ============ MANDALART GENERATION ============
-// Generate a 3x3 Mandalart grid from a user goal using structured output
+// Generate a 3x3 Mandalart grid from a user goal using JSON output
 
 const MANDALART_SYSTEM_PROMPT = `You are the "Data Spirit Guide" (數據指導靈), a wise advisor helping users break down their goals into actionable steps.
 
@@ -537,27 +535,80 @@ Rules:
    - Bad: "Research accommodations" (too vague)
 4. Estimate realistic time in minutes for completing the first step
 5. Assign mcpIntent based on what tool would help:
-   - search: Needs web research
-   - writing: Needs text generation/editing
-   - planning: Needs scheduling/organization
-   - none: Manual action only
+   - Elimination: Remove obstacles or stop bad habits
+   - Accumulation: Build skills through repetition
+   - Planning: Schedule or organize
+   - eXperience: Create meaningful experiences
 
-Aim for a balanced distribution across Q1-Q4 priorities.`;
+Aim for a balanced distribution across Q1-Q4 priorities.
+
+Return ONLY valid JSON in this exact structure (no markdown):
+{
+  "centerTitle": "The main goal",
+  "children": [
+    {
+      "slot": 1,
+      "title": "Sub-task title",
+      "actionStep": "Concrete first action",
+      "priority": "Q1",
+      "estimatedMinutes": 15,
+      "mcpIntent": "Planning"
+    }
+  ]
+}`;
 
 export async function generateMandalartPlan(goal: string): Promise<MandalartGeneration> {
   try {
-    const { object } = await generateObject({
-      model: google("gemini-2.5-flash-preview-04-17"),
-      schema: mandalartGenerationSchema,
-      system: MANDALART_SYSTEM_PROMPT,
-      prompt: `Break down this goal into a Mandalart grid with 8 actionable sub-tasks:
-
-Goal: "${goal}"
-
-Generate a structured plan with the goal as centerTitle and exactly 8 children (slots 1-8).`,
+    const response = await ai.models.generateContent({
+      model: "gemini-2.5-flash",
+      contents: [
+        {
+          role: "user",
+          parts: [{ text: `${MANDALART_SYSTEM_PROMPT}\n\nBreak down this goal into a Mandalart grid with exactly 8 actionable sub-tasks:\n\nGoal: "${goal}"` }],
+        },
+      ],
+      config: {
+        responseMimeType: "application/json",
+      },
     });
 
-    return object;
+    const text = response.text || "{}";
+    let cleanedText = text.trim();
+    if (cleanedText.startsWith("```json")) {
+      cleanedText = cleanedText.slice(7);
+    }
+    if (cleanedText.startsWith("```")) {
+      cleanedText = cleanedText.slice(3);
+    }
+    if (cleanedText.endsWith("```")) {
+      cleanedText = cleanedText.slice(0, -3);
+    }
+    cleanedText = cleanedText.trim();
+
+    const parsed = JSON.parse(cleanedText);
+    
+    // Validate and ensure 8 children with proper structure
+    const validatedResult: MandalartGeneration = {
+      centerTitle: parsed.centerTitle || goal,
+      children: [],
+    };
+
+    const validPriorities = ["Q1", "Q2", "Q3", "Q4"];
+    const validIntents = ["Elimination", "Accumulation", "Planning", "eXperience"];
+
+    for (let i = 0; i < 8; i++) {
+      const child = parsed.children?.[i];
+      validatedResult.children.push({
+        slot: i + 1,
+        title: child?.title || `Sub-task ${i + 1}`,
+        actionStep: child?.actionStep || "Define the first action",
+        priority: validPriorities.includes(child?.priority) ? child.priority : "Q2",
+        estimatedMinutes: typeof child?.estimatedMinutes === "number" ? child.estimatedMinutes : 15,
+        mcpIntent: validIntents.includes(child?.mcpIntent) ? child.mcpIntent : "Planning",
+      });
+    }
+
+    return validatedResult;
   } catch (error) {
     console.error("Mandalart generation error:", error);
     throw new Error("Failed to generate Mandalart plan");
