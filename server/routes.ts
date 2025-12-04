@@ -1,7 +1,7 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage, initializeMonuments } from "./storage";
-import { chat, chatStream, classifyIntent, type ChatMode } from "./gemini";
+import { chat, chatStream, classifyIntent, generateMandalartPlan, type ChatMode } from "./gemini";
 import { GoogleGenAI } from "@google/genai";
 
 // Initialize Gemini AI client for voice mode
@@ -759,6 +759,25 @@ export async function registerRoutes(
       console.error("Error in streaming chat:", error);
       res.write(`data: ${JSON.stringify({ type: "error", message: "Failed to process streaming chat" })}\n\n`);
       res.end();
+    }
+  });
+
+  // ============ MANDALART GENERATION ============
+  
+  // Generate a Mandalart grid from a user goal
+  app.post("/api/mandalart/generate", async (req, res) => {
+    try {
+      const { goal } = req.body;
+      
+      if (!goal || typeof goal !== "string") {
+        return res.status(400).json({ error: "Goal is required and must be a string" });
+      }
+
+      const result = await generateMandalartPlan(goal);
+      res.json(result);
+    } catch (error) {
+      console.error("Error generating Mandalart plan:", error);
+      res.status(500).json({ error: "Failed to generate Mandalart plan" });
     }
   });
 
