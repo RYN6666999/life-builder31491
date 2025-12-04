@@ -98,3 +98,19 @@ Preferred communication style: Simple, everyday language.
 - Filters out raw JSON from streaming display
 - Shows only natural language content to users
 - Immediately displays final content when complete event arrives
+
+### AI Mandalart Generation (December 2025)
+- **Purpose**: Break down goals into structured 3x3 Mandalart grids using AI
+- **API Endpoint**: `POST /api/mandalart/generate`
+- **Schema**: `MandalartGeneration` type in `shared/schema.ts`
+  - `centerTitle`: Main goal
+  - `children`: Array of 8 sub-tasks (slots 1-8)
+    - `slot`: Position (1-8)
+    - `title`: Sub-goal title
+    - `actionStep`: Concrete SMART first action
+    - `priority`: Eisenhower Matrix (Q1-Q4)
+    - `estimatedMinutes`: Time estimate
+    - `mcpIntent`: E/A/P/X category (Elimination/Accumulation/Planning/eXperience)
+- **Implementation**: Uses `@google/genai` client with JSON response mode
+- **Test Page**: `/test-mandalart` for isolated testing
+- **Key Files**: `server/gemini.ts` (generateMandalartPlan), `server/routes.ts`, `client/src/pages/test-mandalart.tsx`
