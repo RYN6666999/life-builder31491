@@ -8,6 +8,7 @@ import Home from "@/pages/home";
 import Settings from "@/pages/settings";
 import VoiceMode from "@/pages/voice-mode";
 import MonumentDetail from "@/pages/monument-detail";
+import TestMandalart from "@/pages/test-mandalart";
 import NotFound from "@/pages/not-found";
 
 function Router() {
@@ -17,6 +18,7 @@ function Router() {
       <Route path="/settings" component={Settings} />
       <Route path="/voice" component={VoiceMode} />
       <Route path="/monuments/:slug" component={MonumentDetail} />
+      <Route path="/test-mandalart" component={TestMandalart} />
       <Route component={NotFound} />
     </Switch>
   );
